@@ -87,6 +87,7 @@ class TagPanel(tk.Frame):
         super().__init__(master, bg=SURFACE2, **kw)
         self.on_change = on_change
         self._tags = []
+        self._relayout_id = None
         self._build()
 
     def _build(self):
@@ -99,8 +100,7 @@ class TagPanel(tk.Frame):
         vsb.pack(side='right', fill='y')
         self._cv.config(yscrollcommand=vsb.set)
         self._inner.bind('<Configure>', self._sync)
-        self._cv.bind('<Configure>', lambda e: (
-            self._cv.itemconfig(self._win, width=e.width), self._relayout()))
+        self._cv.bind('<Configure>', self._on_cv_configure)
         for w in (self._cv, self._inner):
             w.bind('<MouseWheel>', self._scroll)
             w.bind('<Button-4>',   self._scroll)
@@ -136,8 +136,20 @@ class TagPanel(tk.Frame):
 
     def get_tags(self): return list(self._tags)
 
+    def _on_cv_configure(self, e):
+        self._cv.itemconfig(self._win, width=e.width)
+        # 防抖：延迟 50ms 执行，避免销毁过程中触发
+        if self._relayout_id:
+            self.after_cancel(self._relayout_id)
+        self._relayout_id = self.after(50, self._relayout)
+
     def _relayout(self):
-        for w in self._inner.winfo_children(): w.destroy()
+        self._relayout_id = None
+        if not self.winfo_exists():
+            return
+        for w in self._inner.winfo_children():
+            if w.winfo_exists():
+                w.destroy()
         wrap = max(self._cv.winfo_width() - 14, 260)
         row = tk.Frame(self._inner, bg=SURFACE2)
         row.pack(anchor='w', padx=6, pady=5)
@@ -146,6 +158,8 @@ class TagPanel(tk.Frame):
             b = TagBubble(row, tag, self._del, self._ren)
             b.pack(side='left', padx=3, pady=2)
             b.update_idletasks()
+            if not b.winfo_exists():
+                continue
             bw = b.winfo_reqwidth() + 6
             rw += bw
             if rw > wrap:
@@ -595,6 +609,35 @@ class App(tk.Tk):
         self.geometry('1700x980')
         self.minsize(1100, 700)
 
+        # 设置窗口图标
+        def _set_icon():
+            try:
+                _base = Path(__file__).parent
+                # 优先用 small_logo.png，没有则用 logo.png
+                _png = _base / 'small_logo.png'
+                if not _png.exists():
+                    _png = _base / 'logo.png'
+                if not _png.exists():
+                    return
+                _ico = _base / 'app_icon.ico'
+                if not _ico.exists() or _png.stat().st_mtime > _ico.stat().st_mtime:
+                    _img = Image.open(_png).convert('RGBA')
+                    _img.save(str(_ico), format='ICO',
+                              sizes=[(16,16),(32,32),(48,48),(64,64)])
+                # Windows 下 iconbitmap 用绝对路径字符串
+                _ico_str = str(_ico.resolve())
+                self.wm_iconbitmap(_ico_str)
+                self._app_ico = _ico_str  # 供子窗口复用
+            except Exception as e:
+                # 兜底：用 iconphoto
+                try:
+                    _img2 = Image.open(_png).resize((32,32), Image.LANCZOS).convert('RGBA')
+                    self._ico_ph = ImageTk.PhotoImage(_img2)
+                    self.iconphoto(True, self._ico_ph)
+                except Exception:
+                    pass
+        self.after(200, _set_icon)
+
         self.dirs        = {'input': None, 'ref': None, 'result': None}
         self.files       = {'input': {}, 'ref': {}, 'result': {}}
         self.txt_files   = {}
@@ -607,9 +650,10 @@ class App(tk.Tk):
         self._modified   = False
         self._mode       = tk.StringVar(value='one')
 
-        self._thumb_rows  = 1          # 缩略图行数（随sash变化）
-        self._thumb_cache = {}
-        self._thumb_items = []
+        self._thumb_rows   = 1          # 缩略图行数（随sash变化）
+        self._thumb_cache  = {}
+        self._thumb_items  = []
+        self._thumb_single = False
         self._tooltip     = None
         self._panels      = {}
         self._pil_cache   = {}  # path->PIL, LRU cap 80
@@ -700,6 +744,13 @@ class App(tk.Tk):
             lb.pack(side='left', padx=(3,10))
             self._fbtns[key] = (b, lb)
 
+        # 刷新按钮（紧跟文件夹选择栏，位置由 _update_ref_vis 动态管理）
+        self._vsep_folder = tk.Frame(L, bg=BORDER, width=1, height=20)
+        self._vsep_folder.pack(side='left', padx=10, pady=4)
+        self.btn_refresh = self._tbtn(L, '🔄 刷新', self._refresh_dirs,
+                                       fg=TEXT_DIM, state='disabled')
+        self.btn_refresh.pack(side='left', padx=(6, 2))
+
         R = tk.Frame(bar, bg=SURFACE)
         R.pack(side='right', padx=10, pady=7)
 
@@ -716,6 +767,16 @@ class App(tk.Tk):
         self.btn_del = self._tbtn(R, '🗑 删除当前  Del', self._delete_current,
                                    fg=RED, state='disabled')
         self.btn_del.pack(side='right', padx=(0,4))
+
+        # 复制组按钮
+        self.btn_copy = self._tbtn(R, '📋 复制组', self._copy_groups,
+                                    fg=TEXT_DIM, state='disabled')
+        self.btn_copy.pack(side='right', padx=(0,4))
+
+        # 交换参考图按钮
+        self.btn_swapref = self._tbtn(R, '⇄ 交换参考图', self._swap_ref,
+                                       fg=YELLOW, state='disabled')
+        self.btn_swapref.pack(side='right', padx=(0,4))
         self._vsep(R)
 
         self.lbl_mod = tk.Label(R, text='● 未保存', bg=SURFACE, fg=YELLOW, font=F(10))
@@ -774,7 +835,12 @@ class App(tk.Tk):
         te.pack(side='left', fill='x', expand=True, ipady=3)
         te.bind('<Return>', lambda e: self._tag_filter())
         self._tbtn(tr, '×', self._clear_tag_filter, fg=TEXT_DIM).pack(side='left', padx=(3,0))
-        self._tv.trace_add('write', lambda *a: self.after(280, self._tag_filter))
+        self._tf_after_id = None
+        def _schedule_tf(*a):
+            if self._tf_after_id:
+                self.after_cancel(self._tf_after_id)
+            self._tf_after_id = self.after(280, self._tag_filter)
+        self._tv.trace_add('write', _schedule_tf)
         tk.Frame(F_, bg=BORDER, height=1).pack(fill='x')
 
         # 统计栏
@@ -792,7 +858,8 @@ class App(tk.Tk):
                               selectbackground=SURFACE3, selectforeground=TEXT,
                               activestyle='none', relief='flat', bd=0,
                               font=F(10), yscrollcommand=sb.set,
-                              highlightthickness=0, exportselection=False, cursor='hand2')
+                              highlightthickness=0, exportselection=False, cursor='hand2',
+                              selectmode='extended')
         self.lb.pack(side='left', fill='both', expand=True)
         sb.config(command=self.lb.yview)
         self.lb.bind('<<ListboxSelect>>', self._on_sel)
@@ -900,6 +967,7 @@ class App(tk.Tk):
         self._tbtn(batch_row, '－ 删除 Tag', self._batch_del, fg=RED).pack(fill='x', pady=2)
         self._tbtn(batch_row, '⇄  替换 Tag',  self._batch_rep, fg=YELLOW).pack(fill='x', pady=2)
         self._tbtn(batch_row, '✂ 批量对齐裁切', self._batch_align_crop, fg=ORANGE).pack(fill='x', pady=2)
+        self._tbtn(batch_row, '✏ 批量重命名',   self._batch_rename,    fg=YELLOW).pack(fill='x', pady=2)
         tk.Frame(right_frame, bg=BORDER, height=1).pack(fill='x')
 
     def _on_gtag_filter(self, tag):
@@ -927,6 +995,14 @@ class App(tk.Tk):
 
     def _vsep(self, p):
         tk.Frame(p, bg=BORDER, width=1, height=20).pack(side='left', padx=10, pady=4)
+
+    def _set_win_icon(self, win):
+        """给 Toplevel 窗口设置与主窗口相同的图标"""
+        try:
+            if hasattr(self, '_app_ico'):
+                win.wm_iconbitmap(self._app_ico)
+        except Exception:
+            pass
 
     def _mk_panels(self):
         for w in self._img_row.winfo_children(): w.destroy()
@@ -1065,6 +1141,257 @@ class App(tk.Tk):
             self._load(self.cur)
         except Exception as e:
             messagebox.showerror('裁切失败', str(e))
+
+    def _batch_rename(self):
+        if not self.filtered:
+            messagebox.showwarning('提示', '当前没有图片'); return
+
+        dlg = tk.Toplevel(self)
+        dlg.title('批量重命名')
+        dlg.configure(bg=BG)
+        dlg.resizable(True, True)
+        dlg.grab_set()
+        self._set_win_icon(dlg)
+        dlg.update_idletasks()
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        dlg.geometry(f'640x560+{(sw-640)//2}+{(sh-560)//2}')
+        dlg.minsize(480, 400)
+
+        # ── 模式选择 ──────────────────────────────────
+        mode = tk.StringVar(value='prefix')
+
+        top = tk.Frame(dlg, bg=BG)
+        top.pack(fill='x', padx=16, pady=(14, 6))
+
+        tk.Label(top, text='重命名模式', bg=BG, fg=TEXT_DIM, font=F(9)).pack(anchor='w')
+        mode_row = tk.Frame(top, bg=BG)
+        mode_row.pack(fill='x', pady=(4, 0))
+        for val, lbl in (('prefix', '前缀 ＋ 序号'), ('replace', '查找 ／ 替换')):
+            tk.Radiobutton(mode_row, text=lbl, variable=mode, value=val,
+                           bg=BG, fg=TEXT, selectcolor=SURFACE3, activebackground=BG,
+                           font=F(10), command=lambda: _refresh_preview()
+                           ).pack(side='left', padx=(0, 20))
+
+        tk.Frame(dlg, bg=BORDER, height=1).pack(fill='x', padx=16)
+
+        # ── 参数区 ────────────────────────────────────
+        param = tk.Frame(dlg, bg=BG)
+        param.pack(fill='x', padx=16, pady=10)
+
+        # 前缀＋序号
+        frame_prefix = tk.Frame(param, bg=BG)
+        tk.Label(frame_prefix, text='前缀：', bg=BG, fg=TEXT_DIM, font=F(10)).grid(
+            row=0, column=0, sticky='e', pady=4)
+        sv_prefix = tk.StringVar(value='image_')
+        tk.Entry(frame_prefix, textvariable=sv_prefix, bg=SURFACE2, fg=TEXT,
+                 insertbackground=ACCENT, relief='flat', font=F(10),
+                 highlightthickness=1, highlightbackground=BORDER, width=20
+                 ).grid(row=0, column=1, sticky='w', padx=(4, 20))
+        tk.Label(frame_prefix, text='起始序号：', bg=BG, fg=TEXT_DIM, font=F(10)).grid(
+            row=0, column=2, sticky='e')
+        sv_start = tk.StringVar(value='1')
+        tk.Entry(frame_prefix, textvariable=sv_start, bg=SURFACE2, fg=TEXT,
+                 insertbackground=ACCENT, relief='flat', font=F(10),
+                 highlightthickness=1, highlightbackground=BORDER, width=6
+                 ).grid(row=0, column=3, sticky='w', padx=(4, 20))
+        tk.Label(frame_prefix, text='位数（补零）：', bg=BG, fg=TEXT_DIM, font=F(10)).grid(
+            row=0, column=4, sticky='e')
+        sv_digits = tk.StringVar(value='3')
+        tk.Entry(frame_prefix, textvariable=sv_digits, bg=SURFACE2, fg=TEXT,
+                 insertbackground=ACCENT, relief='flat', font=F(10),
+                 highlightthickness=1, highlightbackground=BORDER, width=4
+                 ).grid(row=0, column=5, sticky='w', padx=4)
+
+        # 查找替换
+        frame_replace = tk.Frame(param, bg=BG)
+        tk.Label(frame_replace, text='查找：', bg=BG, fg=TEXT_DIM, font=F(10)).grid(
+            row=0, column=0, sticky='e', pady=4)
+        sv_find = tk.StringVar()
+        tk.Entry(frame_replace, textvariable=sv_find, bg=SURFACE2, fg=TEXT,
+                 insertbackground=ACCENT, relief='flat', font=F(10),
+                 highlightthickness=1, highlightbackground=BORDER, width=22
+                 ).grid(row=0, column=1, sticky='w', padx=(4, 20))
+        tk.Label(frame_replace, text='替换为：', bg=BG, fg=TEXT_DIM, font=F(10)).grid(
+            row=0, column=2, sticky='e')
+        sv_repl = tk.StringVar()
+        tk.Entry(frame_replace, textvariable=sv_repl, bg=SURFACE2, fg=TEXT,
+                 insertbackground=ACCENT, relief='flat', font=F(10),
+                 highlightthickness=1, highlightbackground=BORDER, width=22
+                 ).grid(row=0, column=3, sticky='w', padx=4)
+
+        def _show_frames():
+            m = mode.get()
+            if m == 'prefix':
+                frame_replace.pack_forget()
+                frame_prefix.pack(fill='x')
+            else:
+                frame_prefix.pack_forget()
+                frame_replace.pack(fill='x')
+        _show_frames()
+
+        # ── 预览列表 ──────────────────────────────────
+        tk.Frame(dlg, bg=BORDER, height=1).pack(fill='x', padx=16)
+        tk.Label(dlg, text='预览（左：原名  →  右：新名）',
+                 bg=BG, fg=TEXT_DIM, font=F(9)).pack(anchor='w', padx=16, pady=(6, 2))
+
+        pv_frame = tk.Frame(dlg, bg=BG)
+        pv_frame.pack(fill='both', expand=True, padx=16, pady=(0, 6))
+        pv_sb = tk.Scrollbar(pv_frame, bg=SURFACE2, troughcolor=SURFACE,
+                             relief='flat', bd=0, width=5)
+        pv_sb.pack(side='right', fill='y')
+        pv_lb = tk.Listbox(pv_frame, bg=SURFACE, fg=TEXT_DIM,
+                           selectbackground=SURFACE3, selectforeground=TEXT,
+                           activestyle='none', relief='flat', bd=0,
+                           font=F(10, mono=True), yscrollcommand=pv_sb.set,
+                           highlightthickness=0)
+        pv_lb.pack(side='left', fill='both', expand=True)
+        pv_sb.config(command=pv_lb.yview)
+
+        lbl_conflict = tk.Label(dlg, text='', bg=BG, fg=RED, font=F(9))
+        lbl_conflict.pack(anchor='w', padx=16)
+
+        # ── 计算新名列表 ──────────────────────────────
+        def _calc_new_names():
+            names = list(self.filtered)
+            m = mode.get()
+            result = []
+            if m == 'prefix':
+                prefix = sv_prefix.get()
+                try:    start  = int(sv_start.get())
+                except: start  = 1
+                try:    digits = max(1, int(sv_digits.get()))
+                except: digits = 3
+                for i, n in enumerate(names):
+                    result.append(f'{prefix}{str(start+i).zfill(digits)}')
+            else:
+                find = sv_find.get()
+                repl = sv_repl.get()
+                for n in names:
+                    result.append(n.replace(find, repl) if find else n)
+            return names, result
+
+        def _refresh_preview(*_):
+            _show_frames()
+            pv_lb.delete(0, 'end')
+            names, new_names = _calc_new_names()
+            seen = {}
+            conflicts = []
+            existing = set(self.file_names)
+            for old, new in zip(names, new_names):
+                if new in seen:
+                    conflicts.append(new)
+                seen[new] = True
+                # 名字相同不算变化，冲突标红
+                changed = old != new
+                clash   = new in existing and new != old
+                color   = RED if (new in conflicts or clash) else (ACCENT if changed else TEXT_MUT)
+                arrow   = '→' if changed else '＝'
+                pv_lb.insert('end', f'{old:<30s} {arrow}  {new}')
+                pv_lb.itemconfig('end', fg=color)
+            if conflicts or any(new in existing and new != old
+                                for old, new in zip(names, new_names)):
+                lbl_conflict.config(text='⚠ 红色条目存在冲突，确认后会跳过这些项')
+            else:
+                lbl_conflict.config(text=f'共 {len(names)} 项，变更 '
+                    f'{sum(o!=n for o,n in zip(names,new_names))} 项')
+
+        for sv in (sv_prefix, sv_start, sv_digits, sv_find, sv_repl):
+            sv.trace_add('write', _refresh_preview)
+        _refresh_preview()
+
+        # ── 底部按钮 ──────────────────────────────────
+        tk.Frame(dlg, bg=BORDER, height=1).pack(fill='x', padx=16)
+        btn_row = tk.Frame(dlg, bg=BG)
+        btn_row.pack(fill='x', padx=16, pady=10)
+
+        def _apply():
+            names, new_names = _calc_new_names()
+            existing = set(self.file_names)
+            cur_name = self.filtered[self.cur] if self.cur >= 0 and self.filtered else None
+            errors, skipped, done = [], [], 0
+
+            # 两阶段：先全部临时重命名（防止 A→B、B→C 互相覆盖）
+            tmp_map  = {}  # old_name → (tmp_name, new_name)
+            for old, new in zip(names, new_names):
+                if old == new: continue
+                if new in existing and new != old:
+                    skipped.append(f'{old} → {new}（名称冲突）'); continue
+                tmp = '__brn_' + old  # 临时前缀
+                for key in ('input', 'ref', 'result'):
+                    p = self.files[key].get(old)
+                    if p and p.exists():
+                        try: p.rename(p.parent / (tmp + p.suffix))
+                        except Exception as e: errors.append(str(e))
+                tp = self.txt_files.get(old)
+                if tp and tp.exists():
+                    try: tp.rename(tp.parent / (tmp + '.txt'))
+                    except Exception as e: errors.append(str(e))
+                tmp_map[old] = (tmp, new)
+
+            # 第二阶段：tmp → new
+            for old, (tmp, new) in tmp_map.items():
+                for key in ('input', 'ref', 'result'):
+                    p = self.files[key].get(old)
+                    if p:
+                        tmp_p = p.parent / (tmp + p.suffix)
+                        new_p = p.parent / (new + p.suffix)
+                        if tmp_p.exists():
+                            try:
+                                tmp_p.rename(new_p)
+                                self.files[key][new] = new_p
+                            except Exception as e: errors.append(str(e))
+                        self.files[key].pop(old, None)
+                tp = self.txt_files.get(old)
+                if tp:
+                    tmp_tp = tp.parent / (tmp + '.txt')
+                    new_tp = tp.parent / (new + '.txt')
+                    if tmp_tp.exists():
+                        try:
+                            tmp_tp.rename(new_tp)
+                            self.txt_files[new] = new_tp
+                            if old in self.txt_content:
+                                self.txt_content[new] = self.txt_content.pop(old)
+                        except Exception as e: errors.append(str(e))
+                    self.txt_files.pop(old, None)
+
+                # 更新 file_names / filtered
+                for lst in (self.file_names, self.filtered):
+                    if old in lst:
+                        lst[lst.index(old)] = new
+                self._thumb_cache.pop(old, None)
+                self._res_mismatch.discard(old)
+                done += 1
+                existing.add(new)
+
+            dlg.destroy()
+
+            msg = f'已重命名 {done} 项'
+            if skipped: msg += f'\n跳过 {len(skipped)} 项：\n' + '\n'.join(skipped[:5])
+            if errors:  msg += f'\n错误 {len(errors)} 条：\n' + '\n'.join(errors[:3])
+            messagebox.showinfo('批量重命名完成', msg)
+
+            self._pil_cache.clear()
+            self._render_list()
+            self._update_stats()
+            self._update_global_tags()
+            self._build_thumbs()
+            if cur_name:
+                # 找到 cur_name 对应的新名
+                old_idx = names.index(cur_name) if cur_name in names else -1
+                new_cur = new_names[old_idx] if old_idx >= 0 else cur_name
+                if new_cur in self.filtered:
+                    self._load(self.filtered.index(new_cur))
+                elif self.filtered:
+                    self._load(0)
+
+        tk.Button(btn_row, text='确认重命名', command=_apply,
+                  bg=ACCENT, fg=BG, relief='flat', bd=0,
+                  padx=14, pady=5, font=F(10, bold=True), cursor='hand2'
+                  ).pack(side='right', padx=(6, 0))
+        tk.Button(btn_row, text='取消', command=dlg.destroy,
+                  bg=SURFACE3, fg=TEXT_DIM, relief='flat', bd=0,
+                  padx=14, pady=5, font=F(10), cursor='hand2'
+                  ).pack(side='right')
 
     def _batch_align_crop(self):
         pairs = [(n, self.files['input'][n], self.files['result'][n])
@@ -1245,22 +1572,26 @@ class App(tk.Tk):
 
     def _update_ref_vis(self):
         m = self._mode.get()
-        # 参考图按钮：仅三图模式显示
-        btn, lb = self._fbtns['ref']
-        if m == 'three':
+        # 先全部隐藏，再按当前模式顺序重新 pack，避免顺序错乱
+        for key in ('input', 'ref', 'result'):
+            btn, lb = self._fbtns[key]
+            btn.pack_forget(); lb.pack_forget()
+        self._vsep_folder.pack_forget()
+        self.btn_refresh.pack_forget()
+
+        show_keys = {
+            'one':   ['result'],
+            'two':   ['input', 'result'],
+            'three': ['input', 'ref', 'result'],
+        }.get(m, ['result'])
+
+        for key in show_keys:
+            btn, lb = self._fbtns[key]
             btn.pack(side='left', padx=2)
-            lb.pack(side='left', padx=(3,10))
-        else:
-            btn.pack_forget()
-            lb.pack_forget()
-        # 输入图按钮：单图模式隐藏
-        btn_in, lb_in = self._fbtns['input']
-        if m == 'one':
-            btn_in.pack_forget()
-            lb_in.pack_forget()
-        else:
-            btn_in.pack(side='left', padx=2)
-            lb_in.pack(side='left', padx=(3,10))
+            lb.pack(side='left', padx=(3, 10))
+
+        self._vsep_folder.pack(side='left', padx=10, pady=4)
+        self.btn_refresh.pack(side='left', padx=(6, 2))
         # 筛选按钮：缺输入仅双图/三图有效，缺参考图仅三图有效
         if hasattr(self, 'fbtn'):
             def _fbtn_state(key, enabled):
@@ -1298,6 +1629,7 @@ class App(tk.Tk):
                 except: self.txt_content[nm] = fp.read_text(encoding='gbk', errors='replace')
 
         self._thumb_cache.clear(); self._rebuild()
+        self.btn_refresh.config(state='normal')
 
     # ══════════════════════════════════════
     # 删除当前
@@ -1357,6 +1689,450 @@ class App(tk.Tk):
         self._build_thumbs()
         self._load(self.cur)
 
+    def _copy_groups(self):
+        """将选中的组复制到目标目录，按 input / result / ref 子目录存放"""
+        import shutil
+        sel_indices = self.lb.curselection()
+        if not sel_indices:
+            return
+
+        names = [self.filtered[i] for i in sel_indices]
+
+        dst = filedialog.askdirectory(title=f'选择复制目标目录（将复制 {len(names)} 组）', parent=self)
+        if not dst:
+            return
+        dst = Path(dst)
+
+        # 映射：key -> 目标子目录名
+        key_to_subdir = {'input': 'input', 'ref': 'ref', 'result': 'result'}
+
+        ok, fail = 0, []
+        for name in names:
+            copied_any = False
+            for key, subdir in key_to_subdir.items():
+                src_path = self.files[key].get(name)
+                if src_path and src_path.exists():
+                    out_dir = dst / subdir
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    try:
+                        shutil.copy2(src_path, out_dir / src_path.name)
+                        copied_any = True
+                    except Exception as e:
+                        fail.append(f'{src_path.name}: {e}')
+            # 复制 txt
+            txt_path = self.txt_files.get(name)
+            if txt_path and txt_path.exists():
+                out_dir = dst / 'result'
+                out_dir.mkdir(parents=True, exist_ok=True)
+                try:
+                    shutil.copy2(txt_path, out_dir / txt_path.name)
+                    copied_any = True
+                except Exception as e:
+                    fail.append(f'{txt_path.name}: {e}')
+            if copied_any:
+                ok += 1
+
+        msg = f'已复制 {ok} 组到：\n{dst}'
+        if fail:
+            msg += f'\n\n失败 {len(fail)} 个：\n' + '\n'.join(fail[:10])
+        messagebox.showinfo('复制完成', msg)
+
+    def _refresh_dirs(self):
+        """重新扫描所有已选目录，刷新文件列表（保留当前位置）"""
+        if not any(self.dirs.values()):
+            return
+
+        # 记录当前图片名，刷新后跳回去
+        cur_name = self.filtered[self.cur] if self.cur >= 0 and self.filtered else None
+
+        # 记录旧文件路径集合，只淘汰真正变化了的缩略图缓存
+        old_paths = {}
+        for key in ('input', 'ref', 'result'):
+            old_paths[key] = dict(self.files[key])
+
+        for key in ('input', 'ref', 'result'):
+            p = self.dirs[key]
+            if not p or not p.exists():
+                continue
+            self.files[key] = {f.stem: f for f in p.iterdir()
+                                if f.is_file() and f.suffix.lower() in IMAGE_EXTS}
+            btn, lb = self._fbtns[key]
+            lb.config(text=f'{p.name}（{len(self.files[key])}张）', fg=GREEN)
+
+            if key == 'result':
+                self.txt_files   = {f.stem: f for f in p.iterdir()
+                                     if f.is_file() and f.suffix.lower() == '.txt'}
+                self.txt_content = {}
+                for nm, fp in self.txt_files.items():
+                    try:    self.txt_content[nm] = fp.read_text(encoding='utf-8')
+                    except: self.txt_content[nm] = fp.read_text(encoding='gbk', errors='replace')
+
+        # 只清掉路径发生变化的缩略图缓存，未变化的保留
+        for name in list(self._thumb_cache.keys()):
+            changed = (self.files['input'].get(name) != old_paths['input'].get(name) or
+                       self.files['result'].get(name) != old_paths['result'].get(name))
+            if changed:
+                self._thumb_cache.pop(name, None)
+
+        self._pil_cache.clear()
+        self._res_mismatch.clear()
+        self._rebuild(_autoload=False)  # 不自动跳第一张
+
+        # 用 after 延迟恢复位置，确保在所有挂起事件处理完之后执行
+        def _restore():
+            if cur_name and cur_name in self.filtered:
+                self._load(self.filtered.index(cur_name))
+            elif self.filtered:
+                self._load(0)
+            else:
+                self.cur = -1
+                self._clear_panels()
+        self.after(20, _restore)
+
+    def _swap_ref(self):
+        """弹窗选择目标组，将当前组与目标组的参考图互换"""
+        if self.cur < 0 or not self.filtered: return
+        name_a = self.filtered[self.cur]
+
+        # ── 弹出选择窗口 ──────────────────────────────
+        dlg = tk.Toplevel(self)
+        dlg.title('交换参考图')
+        dlg.configure(bg=BG)
+        dlg.resizable(True, True)
+        dlg.grab_set()
+        # 居中，设最小尺寸
+        dlg.update_idletasks()
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        dlg.geometry(f'560x500+{(sw-560)//2}+{(sh-500)//2}')
+        dlg.minsize(400, 360)
+        self._set_win_icon(dlg)
+
+        _preview_token = [0]
+        _pil_a     = [None]   # 存原始 PIL，用于 resize 时重绘
+        _pil_b     = [None]
+        _resize_id = [None]
+        _last_size = [None]   # 上次绘制时的尺寸，避免无变化时重绘
+
+        def _fit_pil(pil_img, w, h):
+            if pil_img is None or w < 4 or h < 4:
+                return None
+            img = pil_img.copy()
+            img.thumbnail((w, h), Image.LANCZOS)
+            return ImageTk.PhotoImage(img)
+
+        def _update_label(label, ph, placeholder='…'):
+            if not dlg.winfo_exists(): return
+            if ph:
+                label.config(image=ph, text='')
+                label._img = ph
+            else:
+                label.config(image='', text=placeholder, fg=TEXT_MUT, font=F(9))
+                label._img = None
+
+        def _load_bg(path, pil_store, label, token=None, placeholder='…'):
+            try:
+                if path and path.exists():
+                    img = Image.open(path)
+                    # JPEG 用 draft 模式，直接以低分辨率解码，速度快 4-8 倍
+                    if getattr(img, 'format', None) == 'JPEG':
+                        img.draft('RGB', (360, 270))
+                    pil = img.convert('RGB')
+                else:
+                    pil = None
+            except Exception:
+                pil = None
+            def _apply():
+                if not dlg.winfo_exists(): return
+                if token is not None and token != _preview_token[0]: return
+                pil_store[0] = pil
+                w = max(label.winfo_width(),  4)
+                h = max(label.winfo_height(), 4)
+                _update_label(label, _fit_pil(pil, w, h), placeholder)
+            dlg.after(0, _apply)
+
+        def _on_right_resize(e):
+            # 防抖 150ms，且只在尺寸真正变化时触发
+            if _resize_id[0]: dlg.after_cancel(_resize_id[0])
+            _resize_id[0] = dlg.after(150, _redraw_previews)
+
+        def _redraw_previews():
+            _resize_id[0] = None
+            if not dlg.winfo_exists(): return
+            wa = max(lbl_a.winfo_width(), 4);  ha = max(lbl_a.winfo_height(), 4)
+            wb = max(lbl_b.winfo_width(), 4);  hb = max(lbl_b.winfo_height(), 4)
+            cur_size = (wa, ha, wb, hb)
+            if cur_size == _last_size[0]:
+                return  # 尺寸没变，跳过
+            _last_size[0] = cur_size
+            for pil_store, label, w, h, ph_text in (
+                (_pil_a, lbl_a, wa, ha, '…'),
+                (_pil_b, lbl_b, wb, hb, '请在左侧选择'),
+            ):
+                _update_label(label, _fit_pil(pil_store[0], w, h), ph_text)
+
+        # ── 主体：grid 布局，左右均可伸缩 ────────────
+        body = tk.Frame(dlg, bg=BG)
+        body.pack(fill='both', expand=True, padx=14, pady=10)
+        body.columnconfigure(0, weight=3)   # 列表占 3 份
+        body.columnconfigure(1, weight=0)   # 分隔线
+        body.columnconfigure(2, weight=2)   # 预览占 2 份
+        body.rowconfigure(0, weight=1)
+
+        # 左：列表
+        left = tk.Frame(body, bg=BG)
+        left.grid(row=0, column=0, sticky='nsew')
+        left.rowconfigure(1, weight=1)
+        left.columnconfigure(0, weight=1)
+
+        tk.Label(left, text='选择交换目标组', bg=BG, fg=TEXT_DIM,
+                 font=F(9)).grid(row=0, column=0, sticky='w', pady=(0, 4))
+
+        lf = tk.Frame(left, bg=BG)
+        lf.grid(row=1, column=0, sticky='nsew')
+        lf.rowconfigure(0, weight=1); lf.columnconfigure(0, weight=1)
+        sb = tk.Scrollbar(lf, bg=SURFACE2, troughcolor=SURFACE, relief='flat', bd=0, width=5)
+        sb.grid(row=0, column=1, sticky='ns')
+        lb = tk.Listbox(lf, bg=SURFACE, fg=TEXT_DIM,
+                        selectbackground=SURFACE3, selectforeground=TEXT,
+                        activestyle='none', relief='flat', bd=0,
+                        font=F(10), yscrollcommand=sb.set,
+                        highlightthickness=0, exportselection=False)
+        lb.grid(row=0, column=0, sticky='nsew')
+        sb.config(command=lb.yview)
+
+        ref = self.files['ref']
+        others = [n for n in self.file_names if n != name_a]
+        for n in others:
+            lb.insert('end', ('◆ ' if n in ref else '○ ') + n)
+
+        tk.Label(left, text='◆ 有参考图  ○ 无', bg=BG, fg=TEXT_MUT, font=F(8)
+                 ).grid(row=2, column=0, sticky='w', pady=(3, 0))
+
+        # 分隔线
+        tk.Frame(body, bg=BORDER, width=1).grid(row=0, column=1, sticky='ns', padx=10)
+
+        # 右：预览区，垂直均分 A / 箭头 / B
+        right = tk.Frame(body, bg=BG)
+        right.grid(row=0, column=2, sticky='nsew')
+        right.columnconfigure(0, weight=1)
+        right.rowconfigure(1, weight=1)   # lbl_a 伸缩
+        right.rowconfigure(4, weight=1)   # lbl_b 伸缩
+
+        tk.Label(right, text=f'当前  {name_a}', bg=BG, fg=ACCENT,
+                 font=F(9, bold=True)).grid(row=0, column=0, sticky='w')
+        lbl_a = tk.Label(right, bg=SURFACE2, text='…', fg=TEXT_MUT, font=F(9),
+                         highlightthickness=1, highlightbackground=BORDER)
+        lbl_a.grid(row=1, column=0, sticky='nsew', pady=(3, 0))
+        lbl_a.bind('<Configure>', _on_right_resize)
+
+        tk.Label(right, text='⇄', bg=BG, fg=TEXT_DIM, font=F(16)
+                 ).grid(row=2, column=0, pady=6)
+
+        lbl_b_name = tk.Label(right, text='目标  —', bg=BG, fg=TEXT_DIM,
+                               font=F(9, bold=True))
+        lbl_b_name.grid(row=3, column=0, sticky='w')
+        lbl_b = tk.Label(right, bg=SURFACE2, text='请在左侧选择', fg=TEXT_MUT, font=F(9),
+                         highlightthickness=1, highlightbackground=BORDER)
+        lbl_b.grid(row=4, column=0, sticky='nsew', pady=(3, 0))
+        lbl_b.bind('<Configure>', _on_right_resize)
+
+        # 加载 A 的参考图
+        threading.Thread(target=_load_bg,
+                         args=(self.files['ref'].get(name_a), _pil_a, lbl_a),
+                         daemon=True).start()
+
+        # ── 列表选中 → 更新 B 预览 ───────────────────
+        def _on_lb_sel(e):
+            sel = lb.curselection()
+            if not sel: return
+            name_b = others[sel[0]]
+            lbl_b_name.config(text=f'目标  {name_b}', fg=TEXT)
+            lbl_b.config(image='', text='…', fg=TEXT_MUT, font=F(9))
+            lbl_b._img = None
+            tok = _preview_token[0] + 1
+            _preview_token[0] = tok
+            threading.Thread(target=_load_bg,
+                             args=(ref.get(name_b), _pil_b, lbl_b, tok),
+                             daemon=True).start()
+
+        lb.bind('<<ListboxSelect>>', _on_lb_sel)
+
+        # ── 底部按钮 ─────────────────────────────────
+        tk.Frame(dlg, bg=BORDER, height=1).pack(fill='x', padx=14)
+        chosen = tk.StringVar()
+
+        def _confirm():
+            sel = lb.curselection()
+            if not sel:
+                messagebox.showwarning('提示', '请先在左侧选择目标组', parent=dlg)
+                return
+            chosen.set(others[sel[0]])
+            dlg.destroy()
+
+        lb.bind('<Double-Button-1>', lambda e: _confirm())
+
+        btn_row = tk.Frame(dlg, bg=BG)
+        btn_row.pack(fill='x', padx=14, pady=10)
+        tk.Button(btn_row, text='确认交换', command=_confirm,
+                  bg=ACCENT, fg=BG, relief='flat', bd=0,
+                  padx=14, pady=5, font=F(10, bold=True), cursor='hand2'
+                  ).pack(side='right', padx=(6, 0))
+        tk.Button(btn_row, text='取消', command=dlg.destroy,
+                  bg=SURFACE3, fg=TEXT_DIM, relief='flat', bd=0,
+                  padx=14, pady=5, font=F(10), cursor='hand2'
+                  ).pack(side='right')
+
+        self.wait_window(dlg)
+        name_b = chosen.get()
+        if not name_b:
+            return
+
+        # ── 执行文件互换 ───────────────────────────────
+        ref_a = self.files['ref'].get(name_a)   # 可能为 None
+        ref_b = self.files['ref'].get(name_b)   # 可能为 None
+
+        if ref_a is None and ref_b is None:
+            messagebox.showinfo('提示', f'"{name_a}" 和 "{name_b}" 都没有参考图，无需交换')
+            return
+
+        ref_dir = self.dirs['ref']
+        errors = []
+
+        try:
+            if ref_a and ref_b:
+                # 两边都有参考图 → 借助临时文件互换
+                tmp = ref_dir / ('__swap_tmp__' + ref_a.suffix)
+                ref_a.rename(tmp)
+                ref_b.rename(ref_dir / (name_a + ref_b.suffix))
+                tmp.rename(ref_dir / (name_b + ref_a.suffix))
+                new_ref_a = ref_dir / (name_a + ref_b.suffix)
+                new_ref_b = ref_dir / (name_b + ref_a.suffix)
+            elif ref_a:
+                # 只有 A 有参考图 → 改名给 B
+                new_path = ref_dir / (name_b + ref_a.suffix)
+                ref_a.rename(new_path)
+                new_ref_a = None
+                new_ref_b = new_path
+            else:
+                # 只有 B 有参考图 → 改名给 A
+                new_path = ref_dir / (name_a + ref_b.suffix)
+                ref_b.rename(new_path)
+                new_ref_a = new_path
+                new_ref_b = None
+        except Exception as e:
+            messagebox.showerror('交换失败', str(e))
+            return
+
+        # ── 更新内存 ──────────────────────────────────
+        if new_ref_a:
+            self.files['ref'][name_a] = new_ref_a
+        else:
+            self.files['ref'].pop(name_a, None)
+
+        if new_ref_b:
+            self.files['ref'][name_b] = new_ref_b
+        else:
+            self.files['ref'].pop(name_b, None)
+
+        # 清除两组的 PIL 缓存和缩略图缓存
+        for n in (name_a, name_b):
+            self._thumb_cache.pop(n, None)
+            for key in list(self._pil_cache.keys()):
+                if key.stem == n:
+                    self._pil_cache.pop(key, None)
+
+        self._render_list()
+        self._update_stats()
+        self._update_global_tags()
+        self._build_thumbs()
+        self._load(self.cur)
+
+    def _rename_current(self):
+        if self.cur < 0 or not self.filtered: return
+        old_name = self.filtered[self.cur]
+
+        new_name = simpledialog.askstring(
+            '重命名', f'当前名称：{old_name}\n\n输入新名称（不含扩展名）：',
+            initialvalue=old_name, parent=self)
+        if not new_name:
+            return
+        new_name = new_name.strip()
+        if not new_name or new_name == old_name:
+            return
+
+        # 检查新名称是否已存在
+        if new_name in self.file_names:
+            messagebox.showerror('重命名失败', f'"{new_name}" 已存在，请使用其他名称')
+            return
+
+        # 重命名所有关联文件
+        errors = []
+        renamed = {}  # key -> new_path
+
+        for key in ('input', 'ref', 'result'):
+            old_path = self.files[key].get(old_name)
+            if old_path and old_path.exists():
+                new_path = old_path.parent / (new_name + old_path.suffix)
+                try:
+                    old_path.rename(new_path)
+                    renamed[key] = new_path
+                except Exception as e:
+                    errors.append(f'{old_path.name}: {e}')
+
+        # 重命名 txt 文件
+        old_txt = self.txt_files.get(old_name)
+        new_txt_path = None
+        if old_txt and old_txt.exists():
+            new_txt_path = old_txt.parent / (new_name + '.txt')
+            try:
+                old_txt.rename(new_txt_path)
+            except Exception as e:
+                errors.append(f'{old_txt.name}: {e}')
+
+        if errors:
+            messagebox.showerror('部分重命名失败', '\n'.join(errors))
+
+        # 更新内存数据结构
+        for key in ('input', 'ref', 'result'):
+            if old_name in self.files[key]:
+                old_val = self.files[key].pop(old_name)
+                self.files[key][new_name] = renamed.get(key, old_val)
+
+        if old_name in self.txt_files:
+            self.txt_files.pop(old_name)
+            if new_txt_path:
+                self.txt_files[new_name] = new_txt_path
+
+        if old_name in self.txt_content:
+            self.txt_content[new_name] = self.txt_content.pop(old_name)
+
+        # 更新 PIL 缓存 key
+        for key in ('input', 'ref', 'result'):
+            new_path = self.files[key].get(new_name)
+            if new_path:
+                for old_path in list(self._pil_cache.keys()):
+                    if old_path.stem == old_name and old_path.parent == new_path.parent:
+                        self._pil_cache[new_path] = self._pil_cache.pop(old_path)
+
+        self._thumb_cache.pop(old_name, None)
+
+        # 更新 file_names / filtered
+        if old_name in self.file_names:
+            idx = self.file_names.index(old_name)
+            self.file_names[idx] = new_name
+        if old_name in self.filtered:
+            idx = self.filtered.index(old_name)
+            self.filtered[idx] = new_name
+        if old_name in self._res_mismatch:
+            self._res_mismatch.discard(old_name)
+            self._res_mismatch.add(new_name)
+
+        self._render_list()
+        self._update_stats()
+        self._update_global_tags()
+        self._build_thumbs()
+        self._load(self.cur)
+
     # ══════════════════════════════════════
     # 筛选 & 列表
     # ══════════════════════════════════════
@@ -1364,18 +2140,23 @@ class App(tk.Tk):
     def _nkey(self, s):
         return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', s)]
 
-    def _rebuild(self):
+    def _rebuild(self, _autoload=True):
         names = set()
         for k in ('input','ref','result'): names |= set(self.files[k])
         self.file_names = sorted(names, key=self._nkey)
         self._update_global_tags()
+        # 取消挂起的 tag filter debounce，防止 _tv.set('') 触发 _apply(_autoload=True)
+        if getattr(self, '_tf_after_id', None):
+            self.after_cancel(self._tf_after_id)
+            self._tf_after_id = None
         self._tv.set(''); self.tag_filter = None
-        self._apply()
+        self._apply(_autoload=_autoload)
 
     def _set_filter(self, m):
         self.filter_mode = m; self._hl_filter(m); self._apply()
 
     def _tag_filter(self):
+        self._tf_after_id = None
         tv = self._tv.get().strip().lower()
         self.tag_filter = tv if tv else None; self._apply()
 
@@ -1384,7 +2165,7 @@ class App(tk.Tk):
         if hasattr(self, 'gtag'): self.gtag.sync_filter(None)
         self._apply()
 
-    def _apply(self):
+    def _apply(self, _autoload=True):
         inp, res, ref = self.files['input'], self.files['result'], self.files['ref']
         m = self.filter_mode
         if   m == 'all':          base = list(self.file_names)
@@ -1402,8 +2183,9 @@ class App(tk.Tk):
 
         self.filtered = base
         self._render_list(); self._update_stats(); self._update_nav(); self._build_thumbs()
-        if self.filtered: self._load(0)
-        else: self.cur = -1; self._clear_panels()
+        if _autoload:
+            if self.filtered: self._load(0)
+            else: self.cur = -1; self._clear_panels()
 
     def _hl_filter(self, m):
         c = {'all':TEXT_DIM,'no_input':ORANGE,'no_result':ORANGE,
@@ -1589,12 +2371,22 @@ class App(tk.Tk):
     # ══════════════════════════════════════
 
     def _build_thumbs(self):
-        for w in self.ti.winfo_children(): w.destroy()
-        self._thumb_items = []
         inp, res = self.files['input'], self.files['result']
         single = self._mode.get() == 'one'
         rows = self._thumb_rows
-        for idx, name in enumerate(self.filtered):
+        new_names = list(self.filtered)
+
+        # 若列表顺序/内容未变，只更新缩略图图像，不重建 widget
+        old_names = [item[0] for item in self._thumb_items]
+        if old_names == new_names and self._thumb_single == single:
+            self.tcv.config(scrollregion=self.tcv.bbox('all'))
+            threading.Thread(target=self._load_thumbs_bg, daemon=True).start()
+            return
+
+        self._thumb_single = single
+        for w in self.ti.winfo_children(): w.destroy()
+        self._thumb_items = []
+        for idx, name in enumerate(new_names):
             grid_row = idx % rows
             grid_col = idx // rows
             col = tk.Frame(self.ti, bg=SURFACE2, cursor='hand2',
@@ -1678,6 +2470,7 @@ class App(tk.Tk):
         self.bind('<Up>',        lambda e: self._nav(-1))
         self.bind('<Down>',      lambda e: self._nav(1))
         self.bind('<Control-s>', lambda e: self._save())
+        self.bind('<Control-r>', lambda e: self._rename_current())
         self.bind('<Delete>',    lambda e: self._delete_current())
 
     def _nav(self, d):
@@ -1687,7 +2480,10 @@ class App(tk.Tk):
 
     def _on_sel(self, e):
         sel = self.lb.curselection()
-        if sel and sel[0] != self.cur: self._load(sel[0])
+        # 多选时不切换预览，单选才跳转
+        if len(sel) == 1 and sel[0] != self.cur:
+            self._load(sel[0])
+        self._update_copy_btn()
 
     def _update_nav(self):
         total = len(self.filtered)
@@ -1697,6 +2493,14 @@ class App(tk.Tk):
         self.btn_next.config(state='normal' if self.cur<total-1 else 'disabled')
         has = self.cur >= 0 and bool(self.filtered)
         self.btn_del.config(state='normal' if has else 'disabled')
+        # 交换参考图：有参考图目录且当前有图才可用
+        has_ref_dir = bool(self.dirs.get('ref'))
+        self.btn_swapref.config(state='normal' if (has and has_ref_dir) else 'disabled')
+        self._update_copy_btn()
+
+    def _update_copy_btn(self):
+        sel = self.lb.curselection() if hasattr(self, 'lb') else ()
+        self.btn_copy.config(state='normal' if sel else 'disabled')
 
     # ══════════════════════════════════════
     # 加载条目
@@ -2520,3 +3324,4 @@ if __name__ == '__main__':
         app.destroy()
     app.protocol('WM_DELETE_WINDOW', _on_close)
     app.mainloop()
+
