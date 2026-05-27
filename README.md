@@ -1,37 +1,55 @@
-# LoRA 数据集标注查看器
+# DataTag Studio
 
 **中文** | [English](#english)
 
 ---
 
-<img src="logo.png" alt="Louis LU" height="28">
+<img src="static/logo.png" alt="DataTag Studio" height="28">
 
 ---
 
 ## 简介
 
-用于 LoRA 训练数据集的图片管理、Tag 编辑与 AI 自动打标工具。支持单图 / 双图 / 三图并排浏览，气泡式 Tag 编辑，WD14 与 Qwen3.5 双模型 AI 打标，以及输入图与结果图的自动对齐裁切。
+DataTag Studio 是一款本地运行的图像数据集管理与 Tag 标注工具，专为 AI 训练数据整理而设计。支持单图 / 双图 / 三图并排浏览、气泡式 Tag 编辑、WD14 与 Qwen3.5 双模型 AI 自动打标，以及项目管理系统，让多个数据集的切换与配置一键恢复。
+
+---
 
 ## 更新日志
 
+### v4.0
+
+- **项目管理系统**：新建项目时保存当前目录、显示模式与标签分类配置，下次启动自动恢复上次项目；支持多项目切换、保存、删除
+- **应用更名**：`LoRA 数据集标注查看器` → `DataTag Studio`
+- **界面重组**：
+  - 模式切换（单图 / 双图 / 三图）从工具栏移至左侧文件列表顶部
+  - 项目名称与「打开项目」按钮紧贴标题显示，旁边实时显示总组数
+  - 筛选按钮（缺输入 / 缺结果 / 缺TXT 等）改为按需显示，无问题时自动隐藏
+- **全局 Tag 交互优化**：单击行 = 按该 Tag 筛选；悬停出现「＋」按钮 = 添加到当前图，避免误操作
+- **Tag 数量**：全局 Tag 列表中的数字改为黄色，更易区分
+- **Toast 提示**：刷新、未选目录等操作均有底部轻提示反馈
+- **移除批量替换 Tag**（功能冗余）
+- **底部渐变**：文件列表底部 Logo 区与工具栏渐变风格保持一致
+
+### v3.1
+- **数据标签系统**：Tag 编辑区上方新增「🏷 标签」栏，可为每张图片打自定义分类标签，支持颜色自定义
+  - **📊 统计**：弹出环形图，实时展示各标签数量与占比
+  - **点击图例**：直接按标签筛选图片列表
+  - **数字键 1–9**：快速为当前图片打标
+  - **⚙ 管理**：增删标签类别，点击色块循环切换颜色
+  - 标签数据保存在结果目录的 `_labels.json`，重命名 / 删除时自动同步
+
 ### v3.0
-- **交换参考图**：在三图模式下，可将 A 组与 B 组的参考图一键互换，弹窗同时预览两侧参考图，支持自由缩放，图片后台加载不卡 UI
-- **批量重命名**：右侧批量操作区新增「✏ 批量重命名」，支持两种模式：
-  - **前缀＋序号**：自定义前缀、起始序号、补零位数（如 `car_001`）
-  - **查找／替换**：在文件名中查找并替换指定文字
-  - 操作前实时预览新旧名称对比，冲突项自动标红并跳过
-- **重命名快捷键**：单张重命名从工具栏按钮改为 **Ctrl+R**
-- **窗口图标**：标题栏与任务栏显示自定义 L 图标
-- **Bug 修复**：修复刷新后始终跳回第一张的问题（根因：Tag 搜索框防抖回调被意外触发）；修复双图模式下刷新按钮位置错乱；修复 Tag 气泡在窗口缩放时偶发 TclError
+- **交换参考图**：三图模式下一键互换两组参考图，弹窗实时预览双侧
+- **批量重命名**：前缀＋序号 / 查找替换两种模式，操作前实时预览，冲突自动跳过
+- **重命名快捷键 Ctrl+R**
 
 ### v2.0
-- **重命名**：可对单张图片（及所有关联文件）直接改名（Ctrl+R）
-- **刷新目录**：一键重新扫描已选文件夹，新增 / 删除的文件即时同步，自动保持当前浏览位置
-- **复制组**：支持单选或多选（Shift / Ctrl）图片组，一键复制到指定目录，自动按 `input / result / ref` 子目录结构存放
-- **性能优化**：刷新时仅重载变化的缩略图，列表未变时跳过 widget 重建
+- **重命名**、**刷新目录**、**复制组**、缩略图性能优化
 
 ### v1.0
 - 初始版本：双图 / 三图模式、气泡 Tag 编辑、WD14 + Qwen3.5 AI 打标、对齐裁切、批量操作
+
+---
 
 ## 系统要求
 
@@ -41,7 +59,9 @@
 | Python | **3.10 或 3.11**（推荐 3.11，不支持 3.13） |
 | 显卡 | NVIDIA（Qwen AI 打标需要 CUDA；WD14 仅 CPU 亦可运行）|
 
-## 安装步骤
+---
+
+## 安装与启动
 
 ### 第一步：安装 Python
 
@@ -51,21 +71,23 @@
 
 ### 第二步：下载并解压
 
-将压缩包解压到任意文件夹，目录结构如下：
-
 ```
-LoRA_Viewer/
-  ├── lora_reviewer.py      主程序
+DataTag_Studio/
+  ├── main_web.py           主程序（Web 版）
   ├── caption_service.py    AI 打标后台服务
   ├── run.bat               启动脚本
-  ├── logo.png              工具栏 Logo
-  ├── small_logo.png        窗口图标
+  ├── static/
+  │   ├── index.html        前端界面
+  │   ├── logo.ico          网页图标
+  │   └── logo.png          Logo
   └── README.md
 ```
 
-### 第三步：启动程序
+### 第三步：启动
 
-双击 `run.bat`，首次启动会自动安装基础依赖（`pillow`、`send2trash`），完成后主界面自动打开。
+双击 `run.bat`，首次启动自动安装基础依赖（`pillow`、`send2trash`、`fastapi`、`uvicorn`），完成后浏览器自动打开 `http://localhost:7788`。
+
+---
 
 ## 使用方法
 
@@ -73,8 +95,8 @@ LoRA_Viewer/
 
 1. 点击工具栏 **📂 输入图 / 📂 结果图** 选择数据集目录
 2. 左侧列表点击切换图片，支持键盘 ↑↓ 导航
-3. 底部缩略图栏可横向滚动预览，点击跳转
-4. 下方 Tag 区域点击气泡删除，输入框添加新 Tag，Ctrl+S 保存
+3. 底部缩略图栏横向滚动预览，点击跳转
+4. Tag 区域点击气泡删除，输入框添加新 Tag，Ctrl+S 保存
 
 ### 显示模式
 
@@ -84,23 +106,26 @@ LoRA_Viewer/
 | 双图 | 输入图 + 结果图并排 |
 | 三图 | 输入图 + 参考图 + 结果图并排 |
 
+### 项目管理
+
+1. 点击标题旁 **📂 打开项目** 进入项目管理弹窗
+2. 输入名称和备注，点击 **＋ 创建项目**，将当前目录配置保存为项目
+3. 下次启动自动恢复上次打开的项目
+4. 支持多项目切换、保存当前配置、删除
+
 ### 筛选功能
 
-- **缺输入 / 缺结果 / 缺TXT / 分辨率异 / 缺参考图**：快速定位问题文件
-- **Tag 搜索框**：按 Tag 内容过滤图片列表
-- **全局 Tags 面板**（右侧）：单击 Tag 直接添加到当前图，双击按 Tag 筛选图片
+- 左侧顶部筛选按钮（有问题时自动出现）：缺输入 / 缺结果 / 缺TXT / 分辨率异 / 缺参考图
+- **Tag 前缀搜索框**：按 Tag 内容过滤图片列表
+- **全局 Tags 面板**（右侧）：单击行 = 按该 Tag 筛选；悬停点 **＋** = 添加到当前图
 
 ### 重命名（Ctrl+R）
 
-按 **Ctrl+R** 弹出输入框，输入新文件名（不含扩展名），程序自动将该组的输入图、参考图、结果图、TXT 文件统一改名。
-
-### 刷新目录
-
-在外部对文件夹进行增删改操作后，点击工具栏 **🔄 刷新** 重新扫描，当前浏览位置保持不变。
+按 Ctrl+R 弹出输入框，该组的输入图、参考图、结果图、TXT 文件统一改名。
 
 ### 复制图片组
 
-在左侧列表单击选中，或 **Shift+点击** / **Ctrl+点击** 多选，点击工具栏 **📋 复制组**，选择目标目录后按以下结构复制：
+Shift+点击 / Ctrl+点击 多选，点击工具栏 **📋 复制组**，文件按以下结构复制：
 
 ```
 目标目录/
@@ -111,7 +136,7 @@ LoRA_Viewer/
 
 ### 交换参考图
 
-在三图模式下，点击工具栏 **⇄ 交换参考图**，弹窗左侧列出所有组，右侧实时预览当前组与目标组的参考图，确认后自动互换文件名。
+三图模式下，点击工具栏 **⇄ 交换参考图**，弹窗左侧选目标组，右侧实时预览双侧参考图，确认后互换文件名。
 
 ### 批量重命名
 
@@ -119,67 +144,63 @@ LoRA_Viewer/
 
 | 模式 | 说明 |
 |------|------|
-| 前缀＋序号 | 设前缀和起始序号，如 `car_` + `001` → `car_001`、`car_002`… |
-| 查找／替换 | 在文件名中查找并替换指定文字，留空替换框即为删除 |
-
-操作前可实时预览所有改名结果，冲突项红色标注自动跳过。
+| 前缀＋序号 | 自定义前缀和起始序号，如 `car_` + `001` → `car_001`、`car_002`… |
+| 查找／替换 | 在文件名中查找并替换，留空替换框即为删除 |
 
 ### AI 打标
 
-首次使用需要安装 AI 依赖：
-
 1. 点击右上角 **🤖 AI 标注** 打开面板
-2. 点击 **🔧 一键安装全部依赖**（需联网，PyTorch 约 2.5GB）
-3. 安装完成后重新打开 AI 面板，选择模型开始标注
+2. 点击 **🔧 启动服务**
+3. 选择模型，点击 **▶ 标注当前图** 或 **⚡ 批量标注**
 
 | 模型 | 输出格式 | 大小 | 适用场景 |
 |------|----------|------|----------|
 | WD14 v3 | Tag | ~400MB | 快速打标，Danbooru 风格 |
-| Qwen3.5-4B | 自然语言 | ~8GB | 详细描述，支持中文自定义 Prompt |
+| Qwen3.5-4B | 自然语言 | ~8GB | 详细描述，支持自定义 Prompt |
 
 > 模型首次使用自动下载，国内网络自动切换 hf-mirror.com 镜像
 
 ### 对齐裁切
 
-当输入图与结果图分辨率不一致时，分辨率提示栏会出现 **✂ 对齐裁切** 按钮：
+输入图与结果图分辨率不一致时，黄色提示栏出现 **✂ 对齐裁切** 按钮：
 
-- **近似尺寸**（如 1930×1130 vs 1920×1080）：等比缩小后中心裁切至较小尺寸
-- **整数倍关系**（如 3840×2160 vs 1920×1088）：先按倍数缩小，再中心裁切
-- **批量处理**：右侧批量操作区 → **✂ 批量对齐裁切**
+- **近似尺寸**：等比缩小后中心裁切
+- **整数倍关系**（如 4K vs 1080p）：先按倍数缩小，再中心裁切
+- **批量处理**：右侧面板 → **✂ 批量对齐裁切**
 
-### 批量操作
+### 数据标签与统计
 
-右侧面板底部，作用范围为当前筛选列表：
+1. 点击 **⚙ 管理** 新建标签分类（如"规则"/"不规则"），点击色块切换颜色
+2. 点击标签按钮打标，再次点击取消，**数字键 1–9** 快速打标
+3. 点击 **📊 统计** 查看环形图，点击图例按分类筛选列表
+4. 标签数据保存在结果目录的 `_labels.json`
 
-- **＋ 添加 Tag**：给所有筛选图片添加指定 Tag
-- **－ 删除 Tag**：删除指定 Tag
-- **⇄ 替换 Tag**：批量替换 Tag
-- **✂ 批量对齐裁切**：批量处理分辨率不一致的图对
-- **✏ 批量重命名**：批量修改文件名
+### 快捷键
+
+| 快捷键 | 功能 |
+|--------|------|
+| ↑ / ↓ 或 ← / → | 上一张 / 下一张 |
+| Ctrl+S | 保存 Tag |
+| Ctrl+R | 重命名当前图 |
+| Del | 删除当前图 |
+| 1–9 | 快速打标签分类 |
+| Esc | 关闭放大图 / 弹窗 |
 
 ---
 
 ## 常见问题
 
 **Q：双击 run.bat 闪退？**
+Python 未安装或未勾选 Add Python to PATH。命令行输入 `python --version` 验证。
 
-Python 未安装，或安装时未勾选 Add Python to PATH。打开命令行输入 `python --version` 验证。
-
-**Q：AI 打标一直转圈 / 连接超时？**
-
-HuggingFace 国内访问不稳定，程序会自动切换 hf-mirror.com 镜像，等待片刻即可；若持续失败可挂代理。
+**Q：AI 打标连接超时？**
+程序自动切换 hf-mirror.com 镜像，等待片刻；持续失败可挂代理。
 
 **Q：WD14 报 onnxruntime 错误？**
-
-点击 AI 面板内 **🔧 一键安装全部依赖** 重新安装。
-
-**Q：Qwen 报 ImportError 或找不到模型类？**
-
-需要最新版 transformers，点击 **🔧 一键安装全部依赖** 升级。
+重新运行 run.bat，依赖会自动修复。
 
 **Q：Qwen 打标速度极慢？**
-
-Qwen3.5-4B 需要 NVIDIA 显卡（CUDA），纯 CPU 运行会非常慢，建议改用 WD14。
+Qwen3.5-4B 需要 NVIDIA 显卡（CUDA），CPU 运行极慢，建议改用 WD14。
 
 ---
 
@@ -191,34 +212,45 @@ MIT
 
 <a name="english"></a>
 
-[中文](#lora-数据集标注查看器) | **English**
+[中文](#datatag-studio) | **English**
 
 ---
 
 ## Introduction
 
-A dataset management tool for LoRA training — browse images in single / dual / triple panel mode, edit tags with a bubble UI, run AI auto-captioning with WD14 or Qwen3.5-4B, and automatically align & crop mismatched input/result image pairs.
+DataTag Studio is a local image dataset management and tag annotation tool designed for AI training data preparation. It supports single / dual / triple panel image browsing, bubble-style tag editing, WD14 and Qwen3.5 AI auto-captioning, and a project management system for instantly switching between dataset configurations.
+
+---
 
 ## Changelog
 
+### v4.0
+
+- **Project Management**: Save directory settings, display mode, and label configs as a named project; auto-restores the last project on startup; supports multiple project switching, saving, and deletion
+- **Renamed**: `LoRA Dataset Viewer` → `DataTag Studio`
+- **UI Reorganization**:
+  - Mode toggle (Single / Dual / Triple) moved from toolbar to top of the left file list panel
+  - Project name and "Open Project" button placed beside the app title, with live total group count
+  - Filter buttons (missing input / result / TXT etc.) now hidden when there are no issues
+- **Global Tag Interaction**: Single-click row = filter by tag; hover shows "＋" button = add to current image
+- **Tag Count Color**: Numbers in the global tag list are now yellow for better readability
+- **Toast Notifications**: Lightweight bottom toasts for refresh, warnings, etc.
+- **Removed Batch Replace Tag** (redundant)
+- **Bottom Panel Gradient**: Matches the toolbar gradient style
+
+### v3.1
+- **Data Label System**: Custom image classification labels with color coding, statistics ring chart, number key shortcuts, and `_labels.json` persistence
+
 ### v3.0
-- **Swap Reference Images**: In triple-panel mode, swap reference images between any two groups with one click. The dialog previews both sides simultaneously with scalable thumbnails; images load in the background without freezing the UI
-- **Batch Rename**: New "✏ Batch Rename" in the right panel, with two modes:
-  - **Prefix + Number**: Set a prefix, start index, and zero-padding (e.g. `car_001`)
-  - **Find / Replace**: Find and replace text in filenames
-  - Live preview of all old → new name pairs; conflicting entries are highlighted red and skipped automatically
-- **Rename Shortcut**: Single-image rename is now **Ctrl+R** (toolbar button removed)
-- **Window Icon**: Custom L icon in the title bar and taskbar
-- **Bug Fixes**: Fixed refresh always jumping back to the first image (root cause: tag search debounce callback firing unexpectedly); fixed refresh button position in dual-panel mode; fixed occasional TclError in tag bubble panel during window resize
+- **Swap Reference Images**, **Batch Rename** (prefix+number / find-replace with live preview), **Ctrl+R shortcut**
 
 ### v2.0
-- **Rename**: Rename any image group (all associated files) in one step — Ctrl+R
-- **Refresh**: Re-scan selected folders on demand; preserves current viewing position
-- **Copy Groups**: Single or multi-select (Shift / Ctrl) and copy to a destination folder, auto-organized into `input / result / ref` subdirectories
-- **Performance**: Thumbnail cache preserved on refresh; widget rebuild skipped when list is unchanged
+- **Rename**, **Refresh**, **Copy Groups**, thumbnail performance improvements
 
 ### v1.0
-- Initial release: dual / triple panel mode, bubble tag editor, WD14 + Qwen3.5 AI captioning, align & crop, batch operations
+- Initial release: dual/triple panel, bubble tag editor, WD14 + Qwen3.5 AI captioning, align & crop, batch ops
+
+---
 
 ## Requirements
 
@@ -226,7 +258,9 @@ A dataset management tool for LoRA training — browse images in single / dual /
 |------|-------------|
 | OS | Windows 10 / 11 |
 | Python | **3.10 or 3.11** (3.11 recommended; 3.13 not supported) |
-| GPU | NVIDIA (required for Qwen AI captioning; WD14 works on CPU only) |
+| GPU | NVIDIA (required for Qwen; WD14 works on CPU) |
+
+---
 
 ## Installation
 
@@ -234,32 +268,36 @@ A dataset management tool for LoRA training — browse images in single / dual /
 
 Download Python 3.11 from https://www.python.org/downloads/
 
-During installation, make sure to check **"Add Python to PATH"**.
+Check **"Add Python to PATH"** during installation.
 
-### Step 2: Download and Extract
+### Step 2: Extract
 
 ```
-LoRA_Viewer/
-  ├── lora_reviewer.py      Main application
+DataTag_Studio/
+  ├── main_web.py           Main application
   ├── caption_service.py    AI captioning backend
   ├── run.bat               Launch script
-  ├── logo.png              Toolbar logo
-  ├── small_logo.png        Window icon
+  ├── static/
+  │   ├── index.html        Frontend UI
+  │   ├── logo.ico          Favicon
+  │   └── logo.png          Logo
   └── README.md
 ```
 
 ### Step 3: Launch
 
-Double-click `run.bat`. On first launch it installs `pillow` and `send2trash` automatically, then opens the main window.
+Double-click `run.bat`. On first run it installs `pillow`, `send2trash`, `fastapi`, and `uvicorn` automatically, then opens `http://localhost:7788` in your browser.
+
+---
 
 ## Usage
 
 ### Basic Operations
 
 1. Click **📂 Input / 📂 Result** in the toolbar to select dataset folders
-2. Click items in the left list to switch images; use ↑↓ keyboard navigation
-3. Scroll the thumbnail bar at the bottom horizontally; click to jump
-4. Click a tag bubble to delete; type in the input box to add tags; Ctrl+S to save
+2. Click items in the left list; use ↑↓ for keyboard navigation
+3. Scroll the thumbnail strip horizontally; click to jump
+4. Click a tag bubble to delete; type in the input box to add; Ctrl+S to save
 
 ### Display Modes
 
@@ -269,81 +307,54 @@ Double-click `run.bat`. On first launch it installs `pillow` and `send2trash` au
 | Dual | Input + Result side by side |
 | Triple | Input + Reference + Result side by side |
 
+### Project Management
+
+1. Click **📂 Open Project** beside the app title
+2. Enter a name and note, click **＋ Create Project** to save the current directory config
+3. The last project is automatically restored on next startup
+4. Switch, save, or delete projects from the same dialog
+
 ### Filtering
 
-- **Missing Input / Result / TXT / Resolution mismatch / Missing Reference**: quickly locate problem files
-- **Tag search box**: filter the image list by tag content
-- **Global Tags panel** (right side): single-click to add a tag to the current image; double-click to filter by that tag
+- Filter buttons appear automatically when issues exist: Missing Input / Result / TXT / Resolution Mismatch / Missing Reference
+- **Tag prefix search**: filter the image list by tag content
+- **Global Tags panel** (right): single-click to filter; hover and click **＋** to add to the current image
 
 ### Rename (Ctrl+R)
 
-Press **Ctrl+R** to rename the current group. All associated files (input, reference, result, TXT) are renamed together.
-
-### Refresh
-
-After making external changes to the folders, click **🔄 Refresh** to re-scan. Your current viewing position is preserved.
-
-### Copy Groups
-
-Single-click to select, or **Shift+click** / **Ctrl+click** to multi-select. Click **📋 Copy Groups** and choose a destination — files are copied into `input / result / ref` subdirectories automatically.
-
-### Swap Reference Images
-
-In triple-panel mode, click **⇄ Swap Ref** in the toolbar. The dialog lists all groups on the left and shows live previews on the right. Confirm to swap filenames between the two groups.
-
-### Batch Rename
-
-Right panel → **✏ Batch Rename** (operates on the current filtered list):
-
-| Mode | Description |
-|------|-------------|
-| Prefix + Number | Custom prefix and start index, e.g. `car_` + `001` → `car_001`, `car_002`… |
-| Find / Replace | Find and replace text in filenames; leave the replacement blank to delete |
-
-A live preview shows all old → new name pairs before you confirm. Conflicting names are highlighted red and skipped.
+Renames all files in a group (input, reference, result, TXT) simultaneously.
 
 ### AI Captioning
 
-1. Click **🤖 AI Caption** (top-right) to open the panel
-2. Click **🔧 Install All Dependencies** (requires internet; PyTorch ~2.5 GB)
-3. Reopen the panel, select a model, and start captioning
+1. Click **🤖 AI Caption** (top-right)
+2. Click **🔧 Start Service**
+3. Choose a model and click **▶ Caption Current** or **⚡ Batch Caption**
 
 | Model | Output | Size | Use Case |
 |-------|--------|------|----------|
-| WD14 v3 | Tags | ~400 MB | Fast tagging, Danbooru-style |
+| WD14 v3 | Tags | ~400 MB | Fast, Danbooru-style |
 | Qwen3.5-4B | Natural language | ~8 GB | Detailed descriptions, custom prompts |
 
-### Align & Crop
+### Keyboard Shortcuts
 
-When input and result resolutions differ, an **✂ Align & Crop** button appears:
-
-- **Near-equal sizes**: scale down proportionally, then center-crop
-- **Integer scale** (e.g. 4K vs 1080p): scale by integer factor, then center-crop
-- **Batch**: right panel → **✂ Batch Align & Crop**
-
-### Batch Operations
-
-Right panel (operates on the current filtered list):
-
-- **＋ Add Tag** / **－ Remove Tag** / **⇄ Replace Tag**
-- **✂ Batch Align & Crop**
-- **✏ Batch Rename**
+| Shortcut | Action |
+|----------|--------|
+| ↑ / ↓ or ← / → | Previous / Next image |
+| Ctrl+S | Save tags |
+| Ctrl+R | Rename current group |
+| Del | Delete current group |
+| 1–9 | Quick-assign label category |
+| Esc | Close zoom / modal |
 
 ---
 
 ## FAQ
 
 **Q: run.bat closes immediately?**
-Python is not installed or "Add Python to PATH" was not checked. Run `python --version` in a terminal to verify.
+Python not installed or PATH not set. Run `python --version` in a terminal.
 
 **Q: AI captioning times out?**
-The app automatically switches to hf-mirror.com for users in China. If it keeps failing, try a proxy.
-
-**Q: WD14 onnxruntime error?**
-Click **🔧 Install All Dependencies** to reinstall.
-
-**Q: Qwen ImportError or missing model class?**
-Click **🔧 Install All Dependencies** to upgrade transformers.
+App auto-switches to hf-mirror.com. If it keeps failing, use a proxy.
 
 **Q: Qwen is extremely slow?**
 Qwen3.5-4B requires an NVIDIA GPU. Use WD14 on CPU-only machines.

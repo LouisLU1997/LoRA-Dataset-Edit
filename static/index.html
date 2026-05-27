@@ -1,0 +1,1938 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DataTag Studio</title>
+<link rel="icon" href="/static/logo.ico" type="image/x-icon">
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  /* ── Light mode (default) ── */
+  :root {
+    --bg: #f0f2f8;
+    --surface: #ffffff;
+    --surface2: #f5f7fc;
+    --surface3: #e8ecf8;
+    --border: #e4e8f4;
+    --accent: #4364f7;
+    --accent-h: #6280ff;
+    --text: #1a1e2e;
+    --text-dim: #6b7899;
+    --text-mut: #c4cce0;
+    --green: #22c55e;
+    --yellow: #f59e0b;
+    --orange: #f97316;
+    --red: #ef4444;
+    --tag-bg: #edf0fb;
+    --tag-bdr: #d4daf4;
+    --tag-fg: #4e5e90;
+    --shadow: 0 2px 12px rgba(67,100,247,0.07);
+    --shadow-sm: 0 1px 4px rgba(0,0,0,0.06);
+    --img-bg: #e8eaf2;
+  }
+  /* ── Dark mode ── */
+  :root.dark {
+    --bg: #0d0f0f;
+    --surface: #141717;
+    --surface2: #1b1e1e;
+    --surface3: #222626;
+    --border: #2a2e2e;
+    --accent: #c8a84b;
+    --accent-h: #e0c068;
+    --text: #e6e8e8;
+    --text-dim: #7a8585;
+    --text-mut: #363c3c;
+    --green: #3dd68c;
+    --yellow: #d4a84b;
+    --orange: #e07840;
+    --red: #e05555;
+    --tag-bg: #191d1d;
+    --tag-bdr: #232828;
+    --tag-fg: #8a9898;
+    --shadow: 0 2px 12px rgba(0,0,0,0.3);
+    --shadow-sm: 0 1px 4px rgba(0,0,0,0.2);
+    --img-bg: #080810;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', 'Microsoft YaHei', '等线', sans-serif;
+    margin: 0; overflow: hidden; height: 100vh;
+  }
+  .mono { font-family: 'Consolas', 'Courier New', monospace; }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--surface2); }
+  ::-webkit-scrollbar-thumb { background: #c4cce0; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #a8b4cc; }
+
+  /* ── Buttons ── */
+  .btn {
+    padding: 5px 14px;
+    background: var(--surface2);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    transition: all .15s;
+  }
+  .btn:hover { background: var(--surface3); color: var(--text); border-color: #c4cce0; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-accent { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+  .btn-accent:hover { background: var(--accent-h); border-color: var(--accent-h); color: #fff; }
+  .btn-red { color: var(--red); }
+  .btn-green { color: var(--green); }
+  .btn-yellow { color: var(--yellow); }
+  .btn-orange { color: var(--orange); }
+
+  /* ── Inputs ── */
+  input, textarea {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 8px;
+    outline: none;
+    font-family: inherit;
+    transition: border-color .15s;
+  }
+  input:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(67,100,247,0.1); }
+
+  /* ── Tag chips ── */
+  .tag-chip {
+    display: inline-flex; align-items: center;
+    background: var(--tag-bg);
+    border: 1px solid var(--tag-bdr);
+    border-radius: 5px;
+    padding: 2px 4px 2px 8px;
+    margin: 2px;
+    font-size: 12px;
+    color: var(--tag-fg);
+    font-family: 'Consolas', monospace;
+    cursor: default;
+    transition: border-color .12s;
+  }
+  .tag-chip:hover { border-color: var(--accent); }
+  .tag-chip .del { color: #e05555; cursor: pointer; padding: 0 4px; font-size: 14px; line-height: 1; }
+  .tag-chip .del:hover { color: var(--red); }
+
+  /* ── List items ── */
+  .list-item {
+    padding: 5px 10px; cursor: pointer; border-radius: 5px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: 13px; display: flex; align-items: center; gap: 6px;
+    transition: background .1s;
+  }
+  .list-item:hover { background: var(--surface2); }
+  .list-item.active { background: rgba(67,100,247,0.1); color: var(--accent); }
+  .list-item.selected { background: rgba(67,100,247,0.06); }
+  :root.dark .list-item.active { background: var(--surface3); }
+  :root.dark .list-item.selected { background: rgba(200,168,75,0.08); }
+  /* Dark mode overrides for hard-coded light colours */
+  :root.dark .ai-btn { background: rgba(200,168,75,0.08) !important; color: var(--accent) !important; border-color: var(--accent) !important; }
+  :root.dark .unsaved-badge { background: rgba(200,168,75,0.12) !important; border-color: rgba(200,168,75,0.3) !important; color: var(--yellow) !important; }
+  :root.dark .res-warn { background: rgba(212,168,75,0.1) !important; border-color: rgba(212,168,75,0.3) !important; }
+
+  /* ── Panels ── */
+  .panel { background: var(--surface); height: 100%; overflow: hidden; }
+  .card {
+    background: var(--surface);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  /* ── Modals ── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(20,24,48,0.55);
+    z-index: 100; display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(2px);
+  }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    min-width: 400px; max-width: 90vw; max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 40px rgba(67,100,247,0.15);
+  }
+  .modal h3 { color: var(--text); font-size: 16px; font-weight: 700; }
+
+  /* ── Sash dividers ── */
+  .sash-h {
+    height: 5px; background: var(--border); cursor: row-resize; flex-shrink:0;
+    transition: background .15s;
+  }
+  .sash-h:hover, .sash-h.dragging { background: var(--accent); }
+  .sash-v {
+    width: 5px; background: var(--border); cursor: col-resize; flex-shrink:0;
+    transition: background .15s;
+  }
+  .sash-v:hover, .sash-v.dragging { background: var(--accent); }
+  body.dragging-h { cursor: row-resize !important; user-select: none; }
+  body.dragging-v { cursor: col-resize !important; user-select: none; }
+
+  /* ── Thumbnails ── */
+  .thumb-strip { display: flex; gap: 0; overflow-x: auto; background: var(--surface2); }
+  .thumb-col {
+    display: flex; flex-direction: column; gap: 0; cursor: pointer;
+    border: 2px solid transparent; border-radius: 5px; padding: 2px;
+    flex-shrink: 0; transition: border-color .12s;
+  }
+  .thumb-col.active { border-color: var(--accent); }
+  .thumb-col:hover { border-color: var(--surface3); }
+  .thumb-img {
+    width: 100px; height: 62px; object-fit: cover;
+    background: var(--surface3);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-dim); font-size: 11px;
+  }
+  .thumb-label { font-size: 10px; color: var(--text-dim); text-align: center; padding: 1px 2px; white-space: nowrap; overflow: hidden; max-width: 100px; }
+
+  /* ── Image panel ── */
+  .img-panel { position: relative; flex: 1; display: flex; flex-direction: column; background: var(--img-bg); }
+  .img-panel img { width: 100%; height: 100%; object-fit: contain; }
+  .img-panel-hdr { background: var(--surface2); padding: 6px 12px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; border-bottom: 1px solid var(--border); }
+
+  /* ── Global tag list ── */
+  .global-tag-item { padding: 3px 8px; cursor: pointer; font-size: 12px; font-family: 'Consolas', monospace; display: flex; gap: 6px; border-radius: 4px; transition: background .1s; color: var(--text-dim); }
+  .global-tag-item:hover { background: var(--surface2); }
+  .global-tag-item.highlighted { color: var(--green); }
+  .global-tag-item.filtered { color: var(--accent); font-weight: 600; }
+  .global-tag-add { opacity: 0; font-size: 15px; line-height: 1; color: var(--green); padding: 0 2px; flex-shrink: 0; transition: opacity .12s; cursor: pointer; }
+  .global-tag-item:hover .global-tag-add { opacity: 1; }
+  .global-tag-add:hover { color: var(--accent); }
+
+  /* ── Label buttons ── */
+  .label-btn { padding: 3px 10px; border: 2px solid transparent; border-radius: 14px; cursor: pointer; font-size: 12px; transition: all .15s; font-family: inherit; }
+
+  /* ── Progress bars ── */
+  .progress-bar-outer { background: var(--surface3); border-radius: 3px; overflow: hidden; }
+  .progress-bar-inner { height: 100%; border-radius: 3px; transition: width .3s; }
+
+  /* ── SVG ── */
+  .pie-svg { width: 100%; height: 100%; }
+
+  /* ── Misc ── */
+  .cap-log { font-family: 'Consolas', monospace; font-size: 11px; line-height: 1.6; }
+  .no-select { user-select: none; }
+  .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .divider { background: var(--border); }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #1a1e2e; color: #fff; border-radius: 8px;
+    padding: 8px 20px; font-size: 13px; font-weight: 500;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3); z-index: 999;
+    pointer-events: none;
+    animation: toast-in .18s ease;
+  }
+  @keyframes toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+
+  /* ── Logo wrap ── */
+  .logo-wrap {
+    width: 64px; height: 64px; border-radius: 0;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    background: transparent !important;
+  }
+  .logo-title { color: #ffffff; }
+  :root.dark .logo-title { color: var(--text); }
+
+  /* ── Toolbar ── */
+  .toolbar {
+    background: linear-gradient(to right, #4a5c9e 0px, #a0aad8 90px, var(--surface) 220px);
+    border-bottom: 1px solid var(--border);
+    padding: 7px 14px;
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+    box-shadow: var(--shadow-sm);
+  }
+  :root.dark .toolbar {
+    background: var(--surface);
+  }
+  .toolbar-sep { width:1px; height:20px; background:var(--border); margin:0 4px; flex-shrink:0; }
+
+  /* ── Section headers ── */
+  .sec-hdr {
+    padding: 6px 10px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .sec-hdr-title { font-size: 12px; font-weight: 600; color: var(--text-dim); letter-spacing: .02em; text-transform: uppercase; }
+
+  /* ── Mode toggle ── */
+  .mode-group { display:flex; background:var(--surface2); border:1px solid var(--border); border-radius:7px; overflow:hidden; }
+  .mode-btn { padding: 4px 12px; border:none; background:transparent; color:var(--text-dim); cursor:pointer; font-size:13px; font-family:inherit; transition:all .15s; }
+  .mode-btn.active { background: var(--accent); color:#fff; font-weight:600; }
+  .mode-btn:not(.active):hover { background: var(--surface3); color: var(--text); }
+</style>
+</head>
+<body>
+<div id="app" style="height:100vh;display:flex;flex-direction:column;overflow:hidden;">
+
+<!-- ═══ 工具栏 ═══ -->
+<div class="toolbar">
+  <!-- Title -->
+  <span class="logo-title" style="font-size:17px;font-weight:700;letter-spacing:-.01em;margin-right:4px;flex-shrink:0;">DataTag Studio</span>
+  <div class="toolbar-sep"></div>
+
+  <!-- 项目区（紧贴标题）-->
+  <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
+    <!-- 当前项目名 chip -->
+    <span v-if="currentProject"
+      style="font-size:12px;font-weight:600;color:var(--accent);background:rgba(67,100,247,0.08);padding:4px 10px;border-radius:6px;border:1px solid var(--accent);cursor:pointer;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+      :title="currentProject.name" @click="openProjectManager()">📁 {{currentProject.name}}</span>
+    <!-- 共N组 -->
+    <span v-if="st.total>0" style="font-size:11px;color:var(--text-dim);white-space:nowrap;">共 {{st.total}} 组</span>
+    <!-- 打开项目 按钮 -->
+    <button class="btn" style="font-size:12px;padding:4px 10px;flex-shrink:0;" @click="openProjectManager()">
+      {{currentProject ? '切换项目 ▾' : '📂 打开项目'}}
+    </button>
+  </div>
+  <div class="toolbar-sep"></div>
+
+  <!-- 目录选择 -->
+  <template v-for="(cfg,key) in dirCfgs" :key="key">
+    <template v-if="showDirKey(key)">
+      <button class="btn" :style="{color:cfg.color,borderColor:'var(--border)'}" @click="openDirInput(key)">{{cfg.icon}} {{cfg.label}}</button>
+      <span style="font-size:11px;color:var(--text-dim);max-width:120px;background:var(--surface2);padding:3px 8px;border-radius:5px;border:1px solid var(--border);" class="ellipsis" :title="st.dirs[key]||'未选择'">
+        {{st.dirs[key] ? dirName(st.dirs[key]) + '（'+st.dir_counts[key]+'张）' : '未选择'}}
+      </span>
+    </template>
+  </template>
+
+  <div style="flex:1;"></div>
+
+  <!-- 右侧控件 -->
+  <span v-if="modified" class="unsaved-badge" style="color:var(--yellow);font-size:12px;font-weight:600;background:#fff8e8;padding:3px 10px;border-radius:20px;border:1px solid #f5d070;">● 未保存</span>
+  <button class="btn btn-accent" :disabled="st.cur<0" @click="saveTags()">💾 保存  Ctrl+S</button>
+  <div class="toolbar-sep"></div>
+  <button class="btn btn-yellow" style="border-color:var(--border);" :disabled="!st.has_ref_dir||st.cur<0" @click="showSwapRef=true">⇄ 交换参考图</button>
+  <button class="btn" :disabled="!anySelected && st.cur<0" @click="showCopyDst=true">📋 复制组</button>
+  <button class="btn btn-red" style="border-color:var(--border);" :disabled="st.cur<0" @click="deleteCurrentConfirm()">🗑 删除  Del</button>
+  <div class="toolbar-sep"></div>
+  <button class="btn" style="padding:5px 10px;" :disabled="st.cur<=0" @click="navigate(-1)">◀</button>
+  <span class="mono" style="font-size:12px;color:var(--text-dim);min-width:60px;text-align:center;background:var(--surface2);padding:4px 8px;border-radius:6px;border:1px solid var(--border);">{{st.cur>=0?st.cur+1:0}} / {{st.filtered_count||0}}</span>
+  <button class="btn" style="padding:5px 10px;" :disabled="st.cur<0||st.cur>=st.filtered_count-1" @click="navigate(1)">▶</button>
+  <div class="toolbar-sep"></div>
+  <button class="btn ai-btn" style="color:var(--accent);border-color:var(--accent);font-weight:600;background:rgba(67,100,247,0.06);" @click="showCaption=true">🤖 AI 标注</button>
+</div>
+
+<!-- ═══ 主体三栏 ═══ -->
+<div style="flex:1;display:flex;overflow:hidden;min-height:0;gap:6px;padding:6px;background:var(--bg);">
+
+  <!-- ▌左侧：文件列表 ▌ -->
+  <div :style="{width:leftW+'px',minWidth:'160px',display:'flex',flexDirection:'column',background:'var(--surface)',flexShrink:0,overflow:'hidden',borderRadius:'10px',boxShadow:'var(--shadow)'}">
+    <!-- 模式切换 -->
+    <div style="padding:6px 8px;background:var(--surface2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <div class="mode-group" style="flex:1;">
+        <button v-for="m in [{v:'one',t:'单图'},{v:'two',t:'双图'},{v:'three',t:'三图'}]"
+          :key="m.v" class="mode-btn" :class="{active: st.mode===m.v}"
+          style="flex:1;" @click="setMode(m.v)">{{m.t}}</button>
+      </div>
+      <span style="font-size:11px;color:var(--text-mut);white-space:nowrap;">{{st.stats?.total||0}} 张</span>
+    </div>
+    <!-- 状态筛选 -->
+    <div class="sec-hdr">
+      <span class="sec-hdr-title">文件列表</span>
+    </div>
+    <div style="padding:6px 8px;display:flex;flex-wrap:wrap;gap:3px;background:var(--surface2);border-bottom:1px solid var(--border);">
+      <button v-for="f in filterBtns" :key="f.k" class="btn" style="padding:2px 8px;font-size:11px;"
+        :style="{background: st.filter_mode===f.k?'var(--accent)':'var(--surface)',color: st.filter_mode===f.k?'#fff':f.c,fontWeight:st.filter_mode===f.k?'600':'',borderColor:st.filter_mode===f.k?'var(--accent)':'var(--border)'}"
+        :disabled="f.disabled" @click="setFilter(f.k)">{{f.l}}</button>
+    </div>
+
+    <!-- Tag 搜索 -->
+    <div style="padding:6px 8px;display:flex;gap:4px;align-items:center;border-bottom:1px solid var(--border);">
+      <span style="font-size:11px;color:var(--text-dim);">🔍</span>
+      <input v-model="tagSearchInput" @input="onTagSearch" style="flex:1;font-size:12px;" class="mono" placeholder="Tag 前缀搜索…">
+      <button class="btn" style="padding:2px 8px;font-size:12px;" @click="clearTagFilter()">×</button>
+    </div>
+
+    <!-- 统计 -->
+    <div style="padding:4px 10px;font-size:10px;color:var(--text-dim);background:var(--surface2);border-bottom:1px solid var(--border);">{{statsText}}</div>
+
+    <!-- 文件列表 -->
+    <div style="flex:1;overflow-y:auto;padding:4px;" @keydown.prevent>
+      <div v-for="(item,i) in st.list_items" :key="item.name"
+        class="list-item no-select"
+        :class="{active: st.cur===i, selected: selectedSet.has(i)}"
+        @click.exact="clickItem(i, $event)"
+        @click.shift="shiftClick(i)"
+        @click.ctrl="ctrlClick(i)"
+        :style="{color: itemColor(item)}">
+        <span>{{item.icon}}</span>
+        <span class="ellipsis" style="flex:1;" :title="item.name">{{item.name}}</span>
+        <span v-if="item.label_color" :style="{width:'7px',height:'7px',borderRadius:'50%',background:item.label_color,flexShrink:0}"></span>
+      </div>
+      <div v-if="!st.list_items?.length" style="padding:24px 10px;color:var(--text-dim);font-size:12px;text-align:center;">暂无数据</div>
+    </div>
+    <!-- 底部：logo + 明暗切换 -->
+    <div style="border-top:1px solid var(--border);padding:8px 10px;flex-shrink:0;display:flex;align-items:center;gap:8px;background:linear-gradient(to right,#4a5c9e 0px,#a0aad8 90px,var(--surface) 220px);" :style="isDark?{background:'var(--surface)'}:{}">
+      <img src="/static/logo.ico" style="width:72px;height:72px;object-fit:contain;flex-shrink:0;" onerror="this.src='/static/small_logo.png'">
+      <button @click="toggleDark"
+        style="flex:1;padding:7px 0;border-radius:8px;border:1px solid var(--border);
+               background:var(--surface2);cursor:pointer;font-size:13px;
+               display:flex;align-items:center;justify-content:center;gap:6px;
+               color:var(--text-dim);transition:all .15s;font-family:inherit;"
+        onmouseover="this.style.background='var(--surface3)';this.style.color='var(--text)'"
+        onmouseout="this.style.background='var(--surface2)';this.style.color='var(--text-dim)'">
+        <span style="font-size:16px;">{{isDark ? '☀️' : '🌙'}}</span>
+        <span>{{isDark ? '亮色模式' : '暗色模式'}}</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 左侧 sash -->
+  <div class="sash-v" style="border-radius:3px;" @mousedown="startSash('left', $event)"></div>
+
+  <!-- ▌中间：缩略图 + 图片 + Tag ▌ -->
+  <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;border-radius:10px;box-shadow:var(--shadow);background:var(--surface);">
+
+    <!-- 缩略图条 -->
+    <div style="background:var(--surface);flex-shrink:0;border-bottom:1px solid var(--border);">
+      <div class="sec-hdr" style="border-bottom:none;padding-bottom:3px;">
+        <span class="sec-hdr-title">缩略图对比</span>
+        <span style="font-size:10px;color:var(--text-mut);">滚轮左右 · 点击跳转</span>
+      </div>
+      <div ref="thumbStrip" class="thumb-strip" :style="{padding:'4px 6px',height:thumbH+'px',overflowX:'auto',overflowY:'hidden',alignItems:'center'}" @wheel.prevent="onThumbWheel">
+        <!-- 有图：缩略图列表 -->
+        <template v-if="st.list_items?.length">
+          <div v-for="(item,i) in st.list_items" :key="item.name"
+            class="thumb-col" :class="{active: st.cur===i}" @click="navigateTo(i)"
+            style="margin-right:4px;align-self:flex-start;">
+            <template v-if="st.mode!=='one'">
+              <div class="thumb-img">
+                <img v-if="item.has_input" :src="`/api/thumb/input/${encodeURIComponent(item.name)}`" style="width:100%;height:62px;object-fit:cover;" loading="lazy" @error="$event.target.style.display='none'">
+                <span v-else style="font-size:11px;color:var(--text-mut);">—</span>
+              </div>
+              <div style="height:1px;background:var(--border);width:100%;"></div>
+            </template>
+            <div class="thumb-img">
+              <img v-if="item.has_result" :src="`/api/thumb/result/${encodeURIComponent(item.name)}`" style="width:100%;height:62px;object-fit:cover;" loading="lazy" @error="$event.target.style.display='none'">
+              <span v-else style="font-size:11px;color:var(--text-mut);">—</span>
+            </div>
+            <div class="thumb-label" :style="{color: item.has_input&&item.has_result?'var(--text-dim)':'var(--orange)'}">
+              {{item.name.length>14?item.name.substring(0,13)+'…':item.name}}
+            </div>
+          </div>
+        </template>
+        <!-- 无图：占位提示 -->
+        <div v-else style="display:flex;align-items:center;gap:16px;padding:0 16px;width:100%;">
+          <template v-for="cfg in activePanels" :key="cfg.key">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;opacity:0.45;">
+              <div style="width:100px;height:62px;border-radius:5px;border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;">
+                <span style="font-size:22px;">🖼</span>
+              </div>
+              <span :style="{fontSize:'11px',fontWeight:600,color:cfg.color}">{{cfg.label}}</span>
+            </div>
+          </template>
+          <span style="font-size:12px;color:var(--text-mut);margin-left:8px;">← 请先选择目录</span>
+        </div>
+      </div>
+      <div class="sash-h" @mousedown="startSash('thumb', $event)"></div>
+    </div>
+
+    <!-- 图片区 -->
+    <div style="flex:1;display:flex;overflow:hidden;min-height:0;">
+      <template v-for="(cfg,i) in activePanels" :key="cfg.key">
+        <div v-if="i>0" style="width:1px;background:var(--border);flex-shrink:0;"></div>
+        <div class="img-panel" style="min-width:0;">
+          <div class="img-panel-hdr">
+            <span :style="{color:cfg.color,fontWeight:600,fontSize:'13px'}">{{cfg.label}}</span>
+            <span style="font-size:11px;color:var(--text-mut);">点击放大</span>
+          </div>
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;background:var(--img-bg);overflow:hidden;cursor:pointer;" @click="zoomImage(cfg.key)">
+            <img v-if="curName && hasFile(cfg.key)"
+              :src="`/api/image/${cfg.key}/${encodeURIComponent(curName)}?t=${imgTs}`"
+              style="max-width:100%;max-height:100%;object-fit:contain;"
+              @error="$event.target.style.display='none'">
+            <span v-else style="color:var(--text-mut);font-size:13px;">⚠ 无对应图片</span>
+          </div>
+          <div style="background:var(--surface2);padding:3px 12px;font-size:11px;color:var(--text-dim);display:flex;justify-content:space-between;border-top:1px solid var(--border);">
+            <span class="ellipsis">{{curName||'—'}}</span>
+            <span v-if="resInfo[cfg.key]" class="mono" style="color:var(--accent);">{{resInfo[cfg.key]}}</span>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- 分辨率警告 -->
+    <div v-if="st.res_mismatch_cur" class="res-warn" style="background:#fffbe8;border-top:1px solid #f5d070;padding:5px 12px;display:flex;align-items:center;justify-content:space-between;">
+      <span style="color:var(--yellow);font-size:12px;font-weight:600;">⚠ 分辨率不一致</span>
+      <button class="btn btn-yellow" style="padding:2px 10px;font-size:11px;" @click="alignCrop()">✂ 对齐裁切</button>
+    </div>
+
+    <!-- Tag 面板上边 sash -->
+    <div class="sash-h" @mousedown="startSash('tag', $event)"></div>
+
+    <!-- Tag 编辑区 -->
+    <div :style="{flexShrink:0,height:tagH+'px',display:'flex',flexDirection:'column',background:'var(--surface)'}">
+      <!-- Tag 标题行 -->
+      <div class="sec-hdr">
+        <span class="sec-hdr-title">📝 提示词 Tags &nbsp;<span style="font-weight:400;text-transform:none;color:var(--text-mut);">{{curName?'':'请选择图片'}}</span></span>
+        <div style="display:flex;gap:5px;">
+          <button class="btn" style="padding:2px 10px;font-size:11px;" @click="translateTags()">🌐 翻译</button>
+          <button class="btn" style="padding:2px 10px;font-size:11px;" @click="showRename=true" :disabled="st.cur<0">✏ 重命名</button>
+        </div>
+      </div>
+
+      <!-- 标签分类栏 -->
+      <div style="background:var(--surface2);padding:5px 8px;display:flex;align-items:center;flex-wrap:wrap;gap:3px;border-bottom:1px solid var(--border);">
+        <span style="font-size:11px;color:var(--text-dim);padding:0 4px;">
+          {{selectedIndices.length>1?'🏷 已选'+selectedIndices.length+'张：':'🏷 标签：'}}
+        </span>
+        <button v-for="defn in st.label_defs" :key="defn.name"
+          class="label-btn" :style="labelBtnStyle(defn)"
+          @click="setLabel(defn.name)">{{defn.name}}</button>
+        <div style="width:1px;height:16px;background:var(--border);margin:0 6px;"></div>
+        <button class="btn" style="padding:2px 8px;font-size:11px;" @click="showManageLabels=true">⚙ 管理</button>
+        <button class="btn" style="padding:2px 8px;font-size:11px;" @click="showLabelStats=true">📊 统计</button>
+        <template v-if="st.label_filter!==null">
+          <div style="width:1px;height:16px;background:var(--border);margin:0 6px;"></div>
+          <span style="font-size:11px;color:var(--text-dim);">筛选：</span>
+          <span :style="{background:labelFilterColor,color:'#fff',padding:'1px 8px',borderRadius:'12px',fontSize:'11px',fontWeight:600}">
+            {{st.label_filter==='__unlabeled__'?'未标注':st.label_filter}}
+          </span>
+          <button class="btn" style="padding:1px 6px;font-size:11px;" @click="clearLabelFilter()">×</button>
+        </template>
+      </div>
+
+      <!-- Tag 气泡 -->
+      <div style="flex:1;overflow-y:auto;padding:6px 8px;">
+        <span v-for="tag in editTags" :key="tag" class="tag-chip">
+          <span @dblclick="renameTag(tag)">{{tag}}</span>
+          <span class="del" @click="removeTag(tag)">×</span>
+        </span>
+        <span v-if="!editTags.length && curName" style="font-size:12px;color:var(--text-mut);">暂无 Tag，在下方输入框添加</span>
+      </div>
+      <!-- 输入栏 -->
+      <div style="border-top:1px solid var(--border);padding:6px 10px;display:flex;align-items:center;gap:6px;background:var(--surface2);">
+        <span style="color:var(--accent);font-size:16px;font-weight:700;">＋</span>
+        <input v-model="tagInput" @keydown.enter="addTagFromInput" @keydown.tab.prevent="addTagFromInput"
+          style="flex:1;font-size:12px;" class="mono" placeholder="输入 Tag，逗号分隔多个，回车确认">
+        <span style="font-size:10px;color:var(--text-mut);">回车确认</span>
+      </div>
+    </div>
+
+  </div><!-- end center -->
+
+  <!-- 右侧 sash -->
+  <div class="sash-v" style="border-radius:3px;" @mousedown="startSash('right', $event)"></div>
+
+  <!-- ▌右侧：全局Tag + 批量操作 ▌ -->
+  <div :style="{width:rightW+'px',minWidth:'160px',display:'flex',flexDirection:'column',background:'var(--surface)',flexShrink:0,overflow:'hidden',borderRadius:'10px',boxShadow:'var(--shadow)'}">
+    <!-- 全局Tag标题 -->
+    <div class="sec-hdr">
+      <span class="sec-hdr-title">全局 Tags</span>
+      <span style="font-size:11px;color:var(--text-mut);">{{st.global_tags?.length||0}} 种</span>
+    </div>
+    <!-- Tag 搜索框 -->
+    <div style="padding:6px 8px;border-bottom:1px solid var(--border);">
+      <input v-model="globalTagSearch" style="width:100%;font-size:12px;" class="mono" placeholder="🔍 搜索…">
+    </div>
+    <!-- 筛选状态 -->
+    <div v-if="st.tag_filter" style="background:rgba(67,100,247,0.06);padding:4px 8px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);">
+      <span style="font-size:11px;color:var(--accent);font-weight:600;">筛选：{{st.tag_filter}}</span>
+      <button class="btn" style="padding:1px 6px;font-size:11px;" @click="clearTagFilter()">× 清除</button>
+    </div>
+    <!-- Tag 列表 -->
+    <div style="flex:1;overflow-y:auto;padding:4px;">
+      <div v-for="[tag,cnt] in filteredGlobalTags" :key="tag"
+        class="global-tag-item"
+        :class="{highlighted: curTagSet.has(tag), filtered: st.tag_filter===tag}"
+        @click="filterByGlobalTag(tag)"
+        :title="tag"
+        style="position:relative;">
+        <span class="mono" style="color:var(--yellow);min-width:28px;text-align:right;flex-shrink:0;">{{cnt}}</span>
+        <span class="ellipsis mono" style="flex:1;">{{tag}}</span>
+        <span class="global-tag-add" @click.stop="addGlobalTag(tag)" title="添加到当前图">＋</span>
+      </div>
+    </div>
+    <div style="padding:3px 8px 6px;font-size:10px;color:var(--text-mut);text-align:center;border-top:1px solid var(--border);background:var(--surface2);">单击筛选 · ＋ 添加</div>
+
+    <!-- 批量操作 -->
+    <div class="sec-hdr">
+      <span class="sec-hdr-title">批量操作</span>
+      <span style="font-size:10px;color:var(--text-mut);">当前筛选</span>
+    </div>
+    <div style="padding:8px;display:flex;flex-direction:column;gap:5px;background:var(--surface2);">
+      <button class="btn btn-green" style="text-align:left;" @click="batchAdd()">＋ 添加 Tag</button>
+      <button class="btn btn-red" style="text-align:left;" @click="batchDel()">－ 删除 Tag</button>
+      <button class="btn btn-orange" style="text-align:left;" @click="batchAlignCrop()">✂ 批量对齐裁切</button>
+      <button class="btn btn-yellow" style="text-align:left;" @click="showBatchRename=true">✏ 批量重命名</button>
+    </div>
+  </div>
+
+</div><!-- end main -->
+
+<!-- ═══ 模态框 ═══ -->
+
+<!-- 目录输入 -->
+<div v-if="dirInputKey" class="modal-overlay" @click.self="dirInputKey=null">
+  <div class="modal" style="min-width:500px;">
+    <h3 style="margin:0 0 16px;">选择{{dirCfgs[dirInputKey].label}}目录</h3>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <input v-model="dirInputPath" style="flex:1;font-size:13px;" @keydown.enter="confirmDirInput" :placeholder="`例：D:\\dataset\\${dirInputKey}`">
+      <button class="btn" @click="browseDirNative">📂 浏览</button>
+    </div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:16px;">请输入完整路径，或点击"浏览"打开目录选择器</div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn" @click="dirInputKey=null">取消</button>
+      <button class="btn btn-accent" @click="confirmDirInput" :disabled="!dirInputPath.trim()">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- 重命名 -->
+<div v-if="showRename" class="modal-overlay" @click.self="showRename=false">
+  <div class="modal">
+    <h3 style="margin:0 0 12px;">重命名</h3>
+    <div style="margin-bottom:8px;font-size:12px;color:var(--text-dim);">当前：{{curName}}</div>
+    <input v-model="renameInput" style="width:100%;margin-bottom:16px;" @keydown.enter="confirmRename">
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn" @click="showRename=false">取消</button>
+      <button class="btn btn-accent" @click="confirmRename">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- 批量重命名 -->
+<div v-if="showBatchRename" class="modal-overlay" @click.self="showBatchRename=false">
+  <div class="modal" style="min-width:660px;min-height:500px;">
+    <h3 style="margin:0 0 12px;">批量重命名</h3>
+    <div style="display:flex;gap:16px;margin-bottom:10px;">
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;">
+        <input type="radio" v-model="rnMode" value="prefix"> 前缀 + 序号
+      </label>
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;">
+        <input type="radio" v-model="rnMode" value="replace"> 查找 / 替换
+      </label>
+    </div>
+    <div v-if="rnMode==='prefix'" style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+      <span style="font-size:12px;color:var(--text-dim);">前缀</span>
+      <input v-model="rnPrefix" style="width:120px;font-size:12px;" @input="updateRnPreview">
+      <span style="font-size:12px;color:var(--text-dim);">起始序号</span>
+      <input v-model="rnStart" type="number" style="width:60px;font-size:12px;" @input="updateRnPreview">
+      <span style="font-size:12px;color:var(--text-dim);">位数</span>
+      <input v-model="rnDigits" type="number" style="width:50px;font-size:12px;" @input="updateRnPreview">
+    </div>
+    <div v-else style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+      <span style="font-size:12px;color:var(--text-dim);">查找</span>
+      <input v-model="rnFind" style="width:160px;font-size:12px;" @input="updateRnPreview">
+      <span style="font-size:12px;color:var(--text-dim);">替换为</span>
+      <input v-model="rnRepl" style="width:160px;font-size:12px;" @input="updateRnPreview">
+    </div>
+    <div style="height:1px;background:var(--border);margin-bottom:8px;"></div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">预览（原名 → 新名）</div>
+    <div style="flex:1;overflow-y:auto;max-height:260px;background:var(--surface2);border-radius:6px;padding:4px;border:1px solid var(--border);">
+      <div v-for="p in rnPreview" :key="p.old" style="font-size:11px;padding:2px 6px;display:flex;gap:6px;border-radius:3px;" :style="{color:p.conflict?'var(--red)':p.changed?'var(--accent)':'var(--text-dim)',background:p.changed?'rgba(67,100,247,0.04)':''}">
+        <span class="mono ellipsis" style="flex:1;">{{p.old}}</span>
+        <span>→</span>
+        <span class="mono ellipsis" style="flex:1;">{{p.new}}</span>
+      </div>
+    </div>
+    <div v-if="rnConflictMsg" style="color:var(--text-dim);font-size:11px;margin-top:6px;padding:4px 8px;background:var(--surface2);border-radius:4px;">{{rnConflictMsg}}</div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
+      <button class="btn" @click="showBatchRename=false">取消</button>
+      <button class="btn btn-accent" @click="confirmBatchRename">确认重命名</button>
+    </div>
+  </div>
+</div>
+
+<!-- 交换参考图 -->
+<div v-if="showSwapRef" class="modal-overlay" @click.self="showSwapRef=false">
+  <div class="modal" style="min-width:500px;">
+    <h3 style="margin:0 0 12px;">交换参考图</h3>
+    <div style="font-size:12px;color:var(--accent);margin-bottom:8px;font-weight:600;">当前：{{curName}}</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;">选择交换目标组（◆ 有参考图）：</div>
+    <!-- 左右布局：文字列表 + 双图预览 -->
+    <div style="display:flex;gap:10px;height:360px;">
+      <!-- 左：候选列表 -->
+      <div ref="swapRefListEl" style="flex:1;overflow-y:auto;background:var(--surface2);border-radius:6px;border:1px solid var(--border);">
+        <div v-for="name in swapRefCandidates" :key="name"
+          class="list-item" :class="{active: swapRefTarget===name}"
+          style="padding:7px 12px;"
+          @click="swapRefTarget=name">
+          <span :style="{color: hasRef(name)?'var(--green)':'var(--text-mut)',flexShrink:0}">{{hasRef(name)?'◆':'○'}}</span>
+          <span class="ellipsis" style="flex:1;">{{name}}</span>
+        </div>
+      </div>
+      <!-- 右：上下分屏预览 -->
+      <div style="width:200px;display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+        <!-- 上：当前图的参考图 -->
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+          <div style="font-size:11px;font-weight:600;color:var(--accent);">当前参考图</div>
+          <div style="flex:1;background:var(--surface2);border-radius:6px;border:1px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;">
+            <img v-if="curName && hasRef(curName)"
+              :src="`/api/image/ref/${encodeURIComponent(curName)}?t=${imgTs}`"
+              style="width:100%;height:100%;object-fit:contain;">
+            <span v-else style="font-size:11px;color:var(--text-mut);">无参考图</span>
+          </div>
+        </div>
+        <!-- 分隔线 -->
+        <div style="height:1px;background:var(--border);"></div>
+        <!-- 下：选中目标的参考图 -->
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+          <div style="font-size:11px;font-weight:600;color:var(--green);">目标参考图</div>
+          <div style="flex:1;background:var(--surface2);border-radius:6px;border:1px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;">
+            <img v-if="swapRefTarget && hasRef(swapRefTarget)"
+              :src="`/api/image/ref/${encodeURIComponent(swapRefTarget)}?t=${imgTs}`"
+              style="width:100%;height:100%;object-fit:contain;">
+            <span v-else style="font-size:11px;color:var(--text-mut);">{{swapRefTarget ? '无参考图' : '请选择目标'}}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
+      <button class="btn" @click="showSwapRef=false">取消</button>
+      <button class="btn btn-accent" @click="confirmSwapRef" :disabled="!swapRefTarget">确认交换</button>
+    </div>
+  </div>
+</div>
+
+<!-- 复制组目标目录 -->
+<div v-if="showCopyDst" class="modal-overlay" @click.self="showCopyDst=false">
+  <div class="modal">
+    <h3 style="margin:0 0 12px;">复制组</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">
+      将 <strong style="color:var(--accent);">{{selectedIndices.length > 0 ? selectedIndices.length + ' 组（多选）' : '当前图（' + (curName||'—') + '）'}}</strong> 复制到目标目录
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <input v-model="copyDstPath" style="flex:1;font-size:12px;" placeholder="目标目录路径" @keydown.enter="confirmCopy">
+      <button class="btn" @click="browseAndSetPath('copyDstPath')">📂</button>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn" @click="showCopyDst=false">取消</button>
+      <button class="btn btn-accent" @click="confirmCopy" :disabled="!copyDstPath.trim()">复制</button>
+    </div>
+  </div>
+</div>
+
+<!-- 管理标签 -->
+<div v-if="showManageLabels" class="modal-overlay" @click.self="showManageLabels=false">
+  <div class="modal" style="min-width:400px;">
+    <h3 style="margin:0 0 4px;">管理标签分类</h3>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:16px;">点击色块切换颜色 · 数字键 1-9 快速打标</div>
+    <div v-for="(row,i) in labelRows" :key="i" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <div style="width:24px;height:24px;border-radius:6px;cursor:pointer;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,0.15);"
+        :style="{background:row.color}" @click="cycleColor(i)"></div>
+      <input v-model="row.name" style="flex:1;font-size:12px;" placeholder="标签名称">
+      <button style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:0 4px;line-height:1;" @click="labelRows.splice(i,1)">×</button>
+    </div>
+    <button class="btn btn-green" style="margin:8px 0;width:100%;" @click="labelRows.push({name:'',color:labelColors[labelRows.length%10]})">＋ 添加标签</button>
+    <div style="height:1px;background:var(--border);margin:12px 0;"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn" @click="showManageLabels=false">取消</button>
+      <button class="btn btn-accent" @click="saveLabelDefs()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 标签统计 -->
+<div v-if="showLabelStats" class="modal-overlay" @click.self="showLabelStats=false">
+  <div class="modal" style="width:420px;min-width:unset;">
+    <!-- 标题行 -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <h3 style="margin:0;font-size:18px;">标签分布统计</h3>
+      <button style="width:34px;height:34px;border-radius:50%;border:1px solid var(--border);background:var(--surface2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;" @click="showLabelStats=false">×</button>
+    </div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:20px;">共 {{statsData.total}} 张 · 全部数据，不受筛选影响</div>
+
+    <!-- 环形图居中 -->
+    <div style="display:flex;justify-content:center;margin-bottom:24px;">
+      <div style="position:relative;width:200px;height:200px;">
+        <svg viewBox="0 0 240 240" style="width:200px;height:200px;">
+          <!-- 背景弧：270°，底部缺口，圆端头 -->
+          <circle cx="120" cy="120" r="90" fill="none"
+            stroke="var(--surface3)" stroke-width="10"
+            stroke-dasharray="424 142"
+            stroke-linecap="round"
+            transform="rotate(135, 120, 120)"/>
+          <!-- 数据弧段：圆端头 -->
+          <circle v-for="slice in ringSlices" :key="slice.name"
+            cx="120" cy="120" r="90" fill="none"
+            :stroke="slice.color" stroke-width="10"
+            :stroke-dasharray="`${slice.dash} ${slice.gap}`"
+            :stroke-dashoffset="slice.offset"
+            stroke-linecap="round"
+            transform="rotate(135, 120, 120)"
+            style="cursor:pointer;transition:stroke-width .15s;"
+            @mouseenter="$event.target.setAttribute('stroke-width','13')"
+            @mouseleave="$event.target.setAttribute('stroke-width','10')"
+            @click="filterByLabel(slice.name)"/>
+          <!-- 中心遮罩 -->
+          <circle cx="120" cy="120" r="83" fill="var(--surface)"/>
+          <!-- 中心文字 -->
+          <text x="120" y="110" text-anchor="middle" dominant-baseline="middle"
+            fill="var(--text)" style="font-size:34px;font-weight:800;">{{statsData.total}}</text>
+          <text x="120" y="138" text-anchor="middle" dominant-baseline="middle"
+            fill="var(--text-dim)" style="font-size:13px;">张</text>
+        </svg>
+        <!-- 完成率徽章 -->
+        <div style="position:absolute;top:-6px;right:-6px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;color:#fff;"
+          :style="{background:statsData.pct_done>=100?'var(--green)':statsData.pct_done>=50?'var(--accent)':'var(--orange)'}">
+          {{statsData.pct_done?.toFixed(1)}}%
+        </div>
+      </div>
+    </div>
+
+    <!-- 标签列表 -->
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+      <div v-for="row in statsRows" :key="row.name"
+        style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:4px 6px;border-radius:8px;transition:background .12s;"
+        :style="{background: st.label_filter===row.name ? 'var(--surface2)' : ''}"
+        @click="filterByLabel(row.name)">
+        <!-- 色块百分比徽章 -->
+        <div style="min-width:56px;padding:5px 0;border-radius:10px;text-align:center;font-size:13px;font-weight:700;flex-shrink:0;"
+          :style="{background: row.color, color: '#fff'}">
+          {{statsData.total ? (row.count/statsData.total*100).toFixed(0) : 0}}%
+        </div>
+        <!-- 标签名 -->
+        <span style="flex:1;font-size:14px;font-weight:500;">{{row.display}}</span>
+        <!-- 数量 -->
+        <span style="font-size:13px;color:var(--text-dim);text-decoration:underline;text-underline-offset:3px;">{{row.count}} 张</span>
+      </div>
+    </div>
+
+    <!-- 总进度条 -->
+    <div style="border-top:1px solid var(--border);padding-top:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+        <span style="font-size:13px;color:var(--text-dim);">已标注</span>
+        <span style="font-size:20px;font-weight:800;color:var(--text);">{{statsData.labeled}} <span style="font-size:14px;font-weight:400;color:var(--text-dim);">/ {{statsData.total}}</span></span>
+      </div>
+      <div class="progress-bar-outer" style="height:8px;border-radius:4px;">
+        <div class="progress-bar-inner" style="border-radius:4px;"
+          :style="{width:(statsData.pct_done||0)+'%',background:statsData.pct_done>=100?'var(--green)':statsData.pct_done>=50?'var(--accent)':'var(--orange)'}"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- AI 标注 -->
+<div v-if="showCaption" class="modal-overlay" @click.self="showCaption=false">
+  <div class="modal" style="min-width:560px;min-height:500px;display:flex;flex-direction:column;">
+    <h3 style="margin:0 0 14px;">🤖 AI 图生提示词</h3>
+    <!-- 模型 -->
+    <div style="margin-bottom:10px;background:var(--surface2);border-radius:8px;padding:12px;border:1px solid var(--border);">
+      <div style="font-size:11px;font-weight:700;color:var(--text-dim);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;">打标模型</div>
+      <label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;cursor:pointer;">
+        <input type="radio" v-model="capModel" value="wd14" style="margin-top:3px;">
+        <div>
+          <span style="color:var(--green);font-weight:600;">WD14 v3</span>
+          <span style="font-size:11px;color:var(--text-dim);margin-left:8px;">快速 · Tag格式 · 400MB · 推荐</span>
+        </div>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+        <input type="radio" v-model="capModel" value="qwen" style="margin-top:3px;">
+        <div>
+          <span style="color:#a855f7;font-weight:600;">Qwen3.5-4B</span>
+          <span style="font-size:11px;color:var(--text-dim);margin-left:8px;">原生多模态 · 自定义Prompt · 约8GB</span>
+        </div>
+      </label>
+    </div>
+    <!-- 已有TXT处理 -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+      <span style="font-size:12px;color:var(--text-dim);font-weight:600;">已有TXT</span>
+      <label v-for="o in [{v:'skip',t:'跳过'},{v:'append',t:'追加'},{v:'overwrite',t:'覆盖'}]" :key="o.v"
+        style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;">
+        <input type="radio" v-model="capOverwrite" :value="o.v"> {{o.t}}
+      </label>
+    </div>
+    <div style="height:1px;background:var(--border);margin-bottom:10px;"></div>
+    <!-- 操作按钮 -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="btn btn-green" @click="captionCurrent()">▶ 标注当前图</button>
+      <button class="btn btn-accent" @click="captionBatch()">⚡ 批量标注</button>
+      <button class="btn btn-red" style="margin-left:auto;" @click="captionStop()">■ 停止</button>
+    </div>
+    <!-- 状态 -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <span style="font-size:12px;font-weight:600;" :style="{color:st.cap_status?.includes('就绪')||st.cap_status?.includes('完成')?'var(--green)':st.cap_status?.includes('出错')||st.cap_status?.includes('失败')?'var(--red)':'var(--yellow)'}">
+        {{st.cap_status||'● 未启动'}}
+      </span>
+      <span class="mono" style="font-size:11px;color:var(--text-dim);">{{st.cap_progress?(st.cap_progress*100).toFixed(0)+'%':''}}</span>
+    </div>
+    <div style="height:6px;background:var(--surface3);border-radius:3px;margin-bottom:10px;overflow:hidden;">
+      <div :style="{width:(st.cap_progress||0)*100+'%',height:'100%',background:'var(--accent)',transition:'width .3s',borderRadius:'3px'}"></div>
+    </div>
+    <!-- 日志 -->
+    <div style="flex:1;overflow-y:auto;background:var(--surface2);border-radius:6px;padding:10px;min-height:140px;border:1px solid var(--border);" ref="capLogEl">
+      <div v-for="(entry,i) in st.cap_log" :key="i" class="cap-log"
+        :style="{color:entry.color==='green'?'var(--green)':entry.color==='red'?'var(--red)':entry.color==='yellow'?'var(--yellow)':'var(--text-dim)'}">
+        {{entry.msg}}
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:12px;">
+      <button class="btn btn-yellow" style="font-size:11px;" @click="captionStartService()">🔧 启动服务</button>
+      <button class="btn" @click="showCaption=false">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 图片放大 -->
+<div v-if="zoomSrc" class="modal-overlay" style="background:rgba(10,12,30,0.92);" @click="zoomSrc=null">
+  <img :src="zoomSrc" style="max-width:95vw;max-height:95vh;object-fit:contain;border-radius:4px;box-shadow:0 8px 40px rgba(0,0,0,0.4);" @click.stop>
+  <div style="position:fixed;bottom:16px;right:16px;color:rgba(255,255,255,0.5);font-size:12px;">Esc 关闭</div>
+</div>
+
+<!-- 翻译结果 -->
+<div v-if="translateResult" class="modal-overlay" @click.self="translateResult=null">
+  <div class="modal">
+    <h3 style="margin:0 0 12px;">翻译结果</h3>
+    <div style="font-size:13px;line-height:1.8;max-height:300px;overflow-y:auto;color:var(--text);">{{translateResult}}</div>
+    <div style="text-align:right;margin-top:14px;">
+      <button class="btn" @click="translateResult=null">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 项目管理 ═══ -->
+<div v-if="showProjects" class="modal-overlay" @click.self="showProjects=false">
+  <div class="modal" style="min-width:580px;max-width:680px;">
+    <!-- 标题 -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <h3 style="margin:0;font-size:17px;">📁 项目管理</h3>
+      <button style="width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--surface2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;" @click="showProjects=false">×</button>
+    </div>
+
+    <!-- 新建项目区 -->
+    <div style="background:var(--surface2);border-radius:8px;padding:12px;border:1px solid var(--border);margin-bottom:14px;">
+      <div style="font-size:11px;font-weight:700;color:var(--text-dim);margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em;">新建项目</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <div style="flex:1;">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:3px;">名称</div>
+          <input v-model="newProjName" style="width:100%;font-size:13px;" placeholder="项目名称" @keydown.enter="createProject">
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:3px;">备注（可选）</div>
+          <input v-model="newProjNote" style="width:100%;font-size:13px;" placeholder="备注说明" @keydown.enter="createProject">
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;">将保存当前所选目录（<span :style="{color:anyDirSelected?'var(--green)':'var(--orange)'}">{{anyDirSelected?'已选择目录':'未选择目录'}}</span>）、模式和标签分类配置</div>
+      <button class="btn btn-accent" @click="createProject" :disabled="!newProjName.trim()">＋ 创建项目</button>
+    </div>
+
+    <!-- 项目列表 -->
+    <div style="font-size:11px;font-weight:700;color:var(--text-dim);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;">已有项目（{{projectList.length}}）</div>
+    <div v-if="!projectList.length" style="padding:24px;text-align:center;font-size:13px;color:var(--text-dim);">暂无项目，请新建</div>
+    <div style="max-height:360px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+      <div v-for="proj in projectList" :key="proj.id"
+        style="border-radius:8px;border:2px solid transparent;padding:12px 14px;transition:all .15s;cursor:pointer;display:flex;align-items:flex-start;gap:10px;"
+        :style="{
+          background: currentProject?.id===proj.id ? 'rgba(67,100,247,0.06)' : 'var(--surface2)',
+          borderColor: currentProject?.id===proj.id ? 'var(--accent)' : 'var(--border)'
+        }"
+        @click="openProject(proj.id)">
+        <!-- 左边：信息 -->
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span style="font-size:14px;font-weight:600;color:var(--text);" class="ellipsis">{{proj.name}}</span>
+            <span v-if="currentProject?.id===proj.id" style="font-size:10px;padding:1px 7px;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;flex-shrink:0;">当前</span>
+          </div>
+          <div v-if="proj.note" style="font-size:11px;color:var(--text-dim);margin-bottom:4px;" class="ellipsis">{{proj.note}}</div>
+          <!-- 目录预览 -->
+          <div style="font-size:11px;color:var(--text-mut);display:flex;flex-wrap:wrap;gap:6px;">
+            <span v-if="proj.dirs?.input" class="mono" style="color:var(--green);">[输入图] {{proj.dirs.input.split(/[\\/]/).pop()}}</span>
+            <span v-if="proj.dirs?.result" class="mono" style="color:var(--accent);">[结果图] {{proj.dirs.result.split(/[\\/]/).pop()}}</span>
+            <span v-if="proj.dirs?.ref" class="mono" style="color:var(--yellow);">[参考图] {{proj.dirs.ref.split(/[\\/]/).pop()}}</span>
+            <span v-if="!proj.dirs?.input && !proj.dirs?.result && !proj.dirs?.ref" style="color:var(--text-mut);">未配置目录</span>
+          </div>
+          <div style="font-size:10px;color:var(--text-mut);margin-top:4px;">上次打开：{{formatDate(proj.last_opened)}}</div>
+        </div>
+        <!-- 右边：操作按钮 -->
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;" @click.stop>
+          <button v-if="currentProject?.id===proj.id" class="btn btn-accent" style="font-size:11px;padding:3px 10px;" @click="saveCurrentProject">💾 保存</button>
+          <button v-else class="btn" style="font-size:11px;padding:3px 10px;" @click="openProject(proj.id)">▶ 打开</button>
+          <button class="btn btn-red" style="font-size:11px;padding:3px 10px;" @click="deleteProject(proj.id)">🗑</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部 -->
+    <div style="display:flex;justify-content:flex-end;margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
+      <button class="btn" @click="showProjects=false">关闭</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Toast 提示 -->
+<div v-if="toastMsg" class="toast">{{toastMsg}}</div>
+
+</div><!-- end app -->
+
+<script>
+const { createApp, ref, computed, reactive, watch, onMounted, onUnmounted, nextTick } = Vue;
+
+const LABEL_COLORS = ['#3dd68c','#e05555','#d4a84b','#4b9fd4','#a84bd4','#d44b9f','#4bd4c4','#e07840','#7a9f4b','#c8a84b'];
+
+createApp({
+  setup() {
+    // ── State ──────────────────────────────────────────
+    const st = reactive({
+      mode: 'one', dirs: {input:null,ref:null,result:null}, dir_counts: {input:0,ref:0,result:0},
+      cur: -1, cur_name: null, cur_tags: [], cur_has_txt: false,
+      total: 0, filtered_count: 0, filter_mode: 'all', tag_filter: null,
+      label_defs: [], labels: {}, label_filter: null,
+      list_items: [], global_tags: [],
+      stats: {total:0,no_input:0,no_result:0,no_txt:0,no_ref:0,res_mismatch:0,displayed:0},
+      res_mismatch_cur: false, has_ref_dir: false, has_result_dir: false,
+      cap_ready: false, cap_model_loaded: false, cap_status: '', cap_progress: 0, cap_log: [],
+    });
+
+    // ── Dark / Light mode ─────────────────────────────
+    const isDark = ref(localStorage.getItem('theme') === 'dark');
+    function applyTheme() {
+      if (isDark.value) document.documentElement.classList.add('dark');
+      else document.documentElement.classList.remove('dark');
+    }
+    function toggleDark() {
+      isDark.value = !isDark.value;
+      localStorage.setItem('theme', isDark.value ? 'dark' : 'light');
+      applyTheme();
+    }
+    applyTheme(); // apply on load
+
+    // ── UI state ───────────────────────────────────────
+    const modified = ref(false);
+    const editTags = ref([]);
+    const tagInput = ref('');
+    const tagSearchInput = ref('');
+    const globalTagSearch = ref('');
+    const selectedIndices = ref([]);
+    const lastClickIdx = ref(-1);
+
+    // Dir input modal
+    const dirInputKey = ref(null);
+    const dirInputPath = ref('');
+
+    // Toast
+    const toastMsg = ref('');
+    let _toastTimer = null;
+    function toast(msg, ms = 1800) {
+      toastMsg.value = msg;
+      clearTimeout(_toastTimer);
+      _toastTimer = setTimeout(() => { toastMsg.value = ''; }, ms);
+    }
+
+    // Project management
+    const showProjects = ref(false);
+    const projectList = ref([]);
+    const currentProject = ref(null);
+    const newProjName = ref('');
+    const newProjNote = ref('');
+
+    // Modals
+    const showRename = ref(false);
+    const renameInput = ref('');
+    const showBatchRename = ref(false);
+    const showSwapRef = ref(false);
+    const swapRefTarget = ref(null);
+    const showCopyDst = ref(false);
+    const copyDstPath = ref('');
+    const showManageLabels = ref(false);
+    const labelRows = ref([]);
+    const showLabelStats = ref(false);
+    const statsData = ref({total:0,labeled:0,pct_done:0,counts:{},defs:[]});
+    const showCaption = ref(false);
+    const capModel = ref('wd14');
+    const capOverwrite = ref('skip');
+    const zoomSrc = ref(null);
+    const translateResult = ref(null);
+    const imgTs = ref(Date.now());
+
+    // Batch rename
+    const rnMode = ref('prefix');
+    const rnPrefix = ref('image_');
+    const rnStart = ref(1);
+    const rnDigits = ref(3);
+    const rnFind = ref('');
+    const rnRepl = ref('');
+    const rnPreview = ref([]);
+    const rnConflictMsg = ref('');
+
+    // Panel sizes (reactive, draggable)
+    const leftW  = ref(230);   // left panel width px
+    const rightW = ref(210);   // right panel width px
+    const tagH   = ref(220);   // tag editor height px
+
+    // 缩略图高度：单图模式 1 行，双/三图模式 2 行，自动跟随模式变化
+    function defaultThumbH(mode) { return mode === 'one' ? 90 : 158; }
+    const thumbH = ref(defaultThumbH('one'));
+    watch(() => st.mode, (m) => { thumbH.value = defaultThumbH(m); });
+
+    // Image resolution info
+    const resInfo = ref({});
+
+    const thumbStrip = ref(null);
+    const capLogEl = ref(null);
+
+    // ── Computed ───────────────────────────────────────
+    const curName = computed(() => st.cur_name);
+
+    const selectedSet = computed(() => new Set(selectedIndices.value));
+
+    const anyDirSelected = computed(() => Object.values(st.dirs).some(Boolean));
+    const anySelected = computed(() => selectedIndices.value.length > 0);
+
+    const dirCfgs = {
+      input:  {icon:'📂', label:'输入图', color:'var(--green)'},
+      ref:    {icon:'📂', label:'参考图', color:'var(--yellow)'},
+      result: {icon:'📂', label:'结果图', color:'var(--accent)'},
+    };
+
+    const activePanels = computed(() => {
+      if (st.mode==='one')   return [{key:'result',label:'📤 结果图',color:'var(--accent)'}];
+      if (st.mode==='two')   return [{key:'input',label:'📥 输入图',color:'var(--green)'},{key:'result',label:'📤 结果图',color:'var(--accent)'}];
+      return [{key:'input',label:'📥 输入图',color:'var(--green)'},{key:'ref',label:'📋 参考图',color:'var(--yellow)'},{key:'result',label:'📤 结果图',color:'var(--accent)'}];
+    });
+
+    const filterBtns = computed(() => [
+      {l:'全部',k:'all',c:'var(--text-dim)',disabled:false,always:true},
+      {l:'缺输入',k:'no_input',c:'var(--orange)',disabled:st.mode==='one',count:st.stats?.no_input},
+      {l:'缺结果',k:'no_result',c:'var(--orange)',disabled:false,count:st.stats?.no_result},
+      {l:'缺TXT',k:'no_txt',c:'var(--yellow)',disabled:false,count:st.stats?.no_txt},
+      {l:'分辨率异',k:'res_mismatch',c:'var(--yellow)',disabled:false,count:st.stats?.res_mismatch},
+      {l:'缺参考图',k:'no_ref',c:'var(--orange)',disabled:st.mode!=='three',count:st.stats?.no_ref},
+    ].filter(f => f.always || f.count > 0 || st.filter_mode === f.k));
+
+    const statsText = computed(() => {
+      const s = st.stats;
+      const parts = [`共 ${s.total}`];
+      if (s.no_input) parts.push(`缺输入 ${s.no_input}`);
+      if (s.no_result) parts.push(`缺结果 ${s.no_result}`);
+      if (s.no_txt) parts.push(`缺TXT ${s.no_txt}`);
+      if (s.res_mismatch) parts.push(`分辨率异 ${s.res_mismatch}`);
+      if (s.displayed!==s.total) parts.push(`显示 ${s.displayed}`);
+      return parts.join('  ·  ');
+    });
+
+    const filteredGlobalTags = computed(() => {
+      const q = globalTagSearch.value.toLowerCase().trim();
+      return q ? st.global_tags.filter(([t]) => t.toLowerCase().includes(q)) : st.global_tags;
+    });
+
+    const curTagSet = computed(() => new Set(st.cur_tags || []));
+
+    const labelColors = LABEL_COLORS;
+
+    const swapRefCandidates = computed(() => st.list_items?.map(i=>i.name).filter(n=>n!==curName.value) || []);
+
+    const pieSlices = computed(() => {
+      if (!statsData.value.total) return [];
+      const defs = statsData.value.defs || [];
+      const counts = statsData.value.counts || {};
+      const total = statsData.value.total;
+      const items = [...defs.map(d=>({name:d.name,color:d.color||'#c8a84b',count:counts[d.name]||0})),
+                     {name:'__unlabeled__',color:'#666666',count:counts['__unlabeled__']||0}];
+      const cx=120, cy=120, r=96, hole=48;
+      let angle = -Math.PI/2;
+      return items.filter(i=>i.count>0).map(item=>{
+        const pct = item.count/total*100;
+        const ext = (pct/100)*Math.PI*2;
+        const x1=cx+r*Math.cos(angle), y1=cy+r*Math.sin(angle);
+        const x2=cx+r*Math.cos(angle+ext), y2=cy+r*Math.sin(angle+ext);
+        const largeArc = ext>Math.PI?1:0;
+        const mx=cx+(r*0.68)*Math.cos(angle+ext/2), my=cy+(r*0.68)*Math.sin(angle+ext/2);
+        const d=`M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+        const startAngle = angle;
+        angle += ext;
+        return {name:item.name,color:item.color,pct,d,tx:mx,ty:my,startAngle,ext};
+      });
+    });
+
+    const statsRows = computed(() => {
+      const d = statsData.value;
+      if (!d.defs) return [];
+      const rows = d.defs.map(defn=>({
+        name: defn.name, display: defn.name, color: defn.color||'#c8a84b',
+        count: d.counts?.[defn.name]||0,
+      }));
+      rows.push({name:'__unlabeled__',display:'未标注',color:'#666666',count:d.counts?.['__unlabeled__']||0});
+      return rows;
+    });
+
+    // 环形图：270° 开口弧（底部缺口），transform rotate(135) 使缺口在底部
+    const ringSlices = computed(() => {
+      if (!statsData.value.total) return [];
+      const r = 90;
+      const circumference = 2 * Math.PI * r; // ≈ 565.49
+      const arcLen = circumference * 0.75;    // 270° 可用弧长 ≈ 424.12
+      const segGap = 18;                      // 段间隔 px（圆端头需要更大间距）
+      const defs = statsData.value.defs || [];
+      const counts = statsData.value.counts || {};
+      const total = statsData.value.total;
+      // 只画已标注的标签段，背景灰弧自然代表未标注部分
+      const items = defs
+        .map(d => ({ name: d.name, color: d.color || '#c8a84b', count: counts[d.name] || 0 }))
+        .filter(i => i.count > 0);
+      let accumulated = 0;
+      return items.map(item => {
+        const pct = item.count / total;
+        const rawLen = pct * arcLen;
+        const dash = Math.max(0, rawLen - segGap);
+        const gap = circumference - dash;
+        const offset = -accumulated; // 负值=沿路径前进
+        accumulated += rawLen;
+        return { ...item, dash, gap, offset };
+      });
+    });
+
+    const labelFilterColor = computed(() => {
+      if (!st.label_filter || st.label_filter==='__unlabeled__') return '#666666';
+      const d = st.label_defs.find(d=>d.name===st.label_filter);
+      return d?.color||'var(--accent)';
+    });
+
+    // ── Methods ────────────────────────────────────────
+
+    async function api(method, path, body) {
+      const opts = { method, headers: {'Content-Type':'application/json'} };
+      if (body) opts.body = JSON.stringify(body);
+      const r = await fetch('/api' + path, opts);
+      if (!r.ok) {
+        const err = await r.json().catch(()=>({detail:'Unknown error'}));
+        throw new Error(err.detail || r.statusText);
+      }
+      return r.json();
+    }
+
+    async function loadState() {
+      const data = await api('GET', '/state');
+      Object.assign(st, data);
+      // Sync edit tags from state (only if not currently modified)
+      if (!modified.value) {
+        editTags.value = [...(st.cur_tags || [])];
+      }
+      loadResInfo();
+    }
+
+    async function loadResInfo() {
+      if (!curName.value) { resInfo.value = {}; return; }
+      // Load image sizes via naturalWidth/naturalHeight trick
+      const info = {};
+      for (const key of ['input','result','ref']) {
+        if (hasFile(key)) {
+          const img = new Image();
+          img.src = `/api/image/${key}/${encodeURIComponent(curName.value)}?t=${imgTs.value}`;
+          await new Promise(resolve => {
+            img.onload = () => { info[key] = `${img.naturalWidth} × ${img.naturalHeight}`; resolve(); };
+            img.onerror = resolve;
+          });
+        }
+      }
+      resInfo.value = info;
+    }
+
+    function applyState(data) {
+      Object.assign(st, data);
+      if (!modified.value) {
+        editTags.value = [...(st.cur_tags || [])];
+      }
+    }
+
+    function showDirKey(key) {
+      if (key==='ref') return st.mode==='three';
+      if (key==='input') return st.mode!=='one';
+      return true;
+    }
+
+    function dirName(p) {
+      if (!p) return '';
+      return p.split(/[\\/]/).pop();
+    }
+
+    function hasFile(key) {
+      return st.list_items?.find(i=>i.name===curName.value)?.[`has_${key}`] || false;
+    }
+
+    function hasRef(name) {
+      return st.list_items?.find(i=>i.name===name)?.has_ref || false;
+    }
+
+    function itemColor(item) {
+      if (item.color==='orange') return 'var(--orange)';
+      if (item.color==='yellow') return 'var(--yellow)';
+      if (item.color==='dim_yellow') return '#b8a060';
+      return 'var(--text-dim)';
+    }
+
+    function openDirInput(key) {
+      dirInputKey.value = key;
+      dirInputPath.value = st.dirs[key] || '';
+    }
+
+    async function browseDirNative() {
+      try {
+        const r = await api('GET', '/browse-dir');
+        if (r.path) dirInputPath.value = r.path;
+      } catch(e) { alert('浏览失败：' + e.message); }
+    }
+
+    async function browseAndSetPath(varName) {
+      try {
+        const r = await api('GET', '/browse-dir');
+        if (r.path) {
+          if (varName === 'copyDstPath') copyDstPath.value = r.path;
+        }
+      } catch(e) {}
+    }
+
+    async function confirmDirInput() {
+      if (!dirInputPath.value.trim()) return;
+      try {
+        const data = await api('POST', '/select-dir', {key: dirInputKey.value, path: dirInputPath.value.trim()});
+        applyState(data);
+        dirInputKey.value = null;
+        modified.value = false;
+        imgTs.value = Date.now();
+      } catch(e) { alert('选择目录失败：' + e.message); }
+    }
+
+    async function refresh() {
+      if (!anyDirSelected.value) { toast('⚠ 请先选择目录'); return; }
+      const data = await api('POST', '/refresh');
+      applyState(data);
+      imgTs.value = Date.now();
+      toast('✓ 已刷新');
+    }
+
+    async function setMode(m) {
+      const data = await api('POST', '/set-mode', {mode: m});
+      applyState(data);
+      imgTs.value = Date.now();
+    }
+
+    async function navigate(delta) {
+      const data = await api('POST', '/navigate', {delta});
+      applyState(data);
+      modified.value = false;
+      selectedIndices.value = [];
+      imgTs.value = Date.now();
+    }
+
+    async function navigateTo(idx) {
+      const data = await api('POST', '/navigate', {to: idx});
+      applyState(data);
+      modified.value = false;
+      selectedIndices.value = [];
+      imgTs.value = Date.now();
+    }
+
+    async function setFilter(mode) {
+      const data = await api('POST', '/set-filter', {mode});
+      applyState(data);
+      imgTs.value = Date.now();
+    }
+
+    function onTagSearch() {
+      clearTimeout(onTagSearch._t);
+      onTagSearch._t = setTimeout(() => {
+        const v = tagSearchInput.value.trim().toLowerCase();
+        api('POST', '/set-tag-filter', {tag: v || null}).then(data => applyState(data));
+      }, 280);
+    }
+
+    async function clearTagFilter() {
+      tagSearchInput.value = '';
+      const data = await api('POST', '/set-tag-filter', {tag: null});
+      applyState(data);
+    }
+
+    async function clearLabelFilter() {
+      const data = await api('POST', '/set-label-filter', {label: null});
+      applyState(data);
+    }
+
+    function clickItem(i, e) {
+      if (e.ctrlKey || e.metaKey) { ctrlClick(i); return; }
+      if (e.shiftKey) { shiftClick(i); return; }
+      selectedIndices.value = [];
+      lastClickIdx.value = i;
+      navigateTo(i);
+    }
+
+    function ctrlClick(i) {
+      const idx = selectedIndices.value.indexOf(i);
+      if (idx>=0) selectedIndices.value.splice(idx,1);
+      else selectedIndices.value.push(i);
+      lastClickIdx.value = i;
+    }
+
+    function shiftClick(i) {
+      const from = lastClickIdx.value>=0 ? lastClickIdx.value : st.cur;
+      const lo = Math.min(from, i), hi = Math.max(from, i);
+      selectedIndices.value = [];
+      for (let j=lo;j<=hi;j++) selectedIndices.value.push(j);
+    }
+
+    // ── Tag editing ────────────────────────────────────
+    function addTagFromInput() {
+      const parts = tagInput.value.split(',').map(t=>t.trim()).filter(Boolean);
+      parts.forEach(t => { if (!editTags.value.includes(t)) editTags.value.push(t); });
+      tagInput.value = '';
+      modified.value = true;
+    }
+
+    function removeTag(tag) {
+      const idx = editTags.value.indexOf(tag);
+      if (idx>=0) { editTags.value.splice(idx,1); modified.value = true; }
+    }
+
+    function renameTag(old) {
+      const nw = prompt(`重命名 Tag\n当前：${old}\n新名称：`, old);
+      if (nw && nw.trim() && nw.trim()!==old) {
+        const idx = editTags.value.indexOf(old);
+        if (idx>=0) { editTags.value[idx]=nw.trim(); modified.value=true; }
+      }
+    }
+
+    async function saveTags() {
+      if (!curName.value) return;
+      try {
+        const data = await api('POST', '/save-tags', {name: curName.value, tags: editTags.value});
+        applyState(data);
+        modified.value = false;
+      } catch(e) { alert('保存失败：' + e.message); }
+    }
+
+    function addGlobalTag(tag) {
+      if (st.cur<0) return;
+      if (!editTags.value.includes(tag)) { editTags.value.push(tag); modified.value=true; }
+    }
+
+    async function filterByGlobalTag(tag) {
+      const newTag = st.tag_filter===tag ? null : tag;
+      tagSearchInput.value = newTag || '';
+      const data = await api('POST', '/set-tag-filter', {tag: newTag});
+      applyState(data);
+    }
+
+    // ── Labels ─────────────────────────────────────────
+    function labelBtnStyle(defn) {
+      const names = selectedIndices.value.length>1
+        ? selectedIndices.value.filter(i=>i<st.list_items.length).map(i=>st.list_items[i].name)
+        : (curName.value ? [curName.value] : []);
+      const hasAll = names.length>0 && names.every(n=>st.labels[n]===defn.name);
+      const hasSome = names.some(n=>st.labels[n]===defn.name);
+      if (hasAll) return {background: defn.color, color:'#fff', fontWeight:600, border:'2px solid '+defn.color};
+      if (hasSome) return {background:'var(--surface)', color:defn.color, border:'2px solid '+defn.color};
+      return {background:'var(--surface)', color:'var(--text-dim)', border:'2px solid transparent'};
+    }
+
+    async function setLabel(name) {
+      const names = selectedIndices.value.length>1
+        ? selectedIndices.value.filter(i=>i<st.list_items.length).map(i=>st.list_items[i].name)
+        : (curName.value ? [curName.value] : []);
+      if (!names.length) return;
+      const data = await api('POST', '/set-label', {names, label: name});
+      applyState(data);
+    }
+
+    async function filterByLabel(name) {
+      showLabelStats.value = false;
+      const newLabel = st.label_filter===name ? null : name;
+      const data = await api('POST', '/set-label-filter', {label: newLabel});
+      applyState(data);
+    }
+
+    // Open manage labels - init rows
+    watch(showManageLabels, async (v) => {
+      if (v) labelRows.value = st.label_defs.map(d=>({...d}));
+    });
+
+    function cycleColor(i) {
+      const cur = labelRows.value[i].color;
+      const idx = (LABEL_COLORS.indexOf(cur)+1) % LABEL_COLORS.length;
+      labelRows.value[i].color = LABEL_COLORS[idx];
+    }
+
+    async function saveLabelDefs() {
+      const defs = labelRows.value.filter(r=>r.name.trim()).map(r=>({name:r.name.trim(),color:r.color}));
+      const data = await api('POST', '/label-defs', {defs});
+      applyState(data);
+      showManageLabels.value = false;
+    }
+
+    async function openLabelStats() {
+      const data = await api('GET', '/label-stats');
+      statsData.value = data;
+      showLabelStats.value = true;
+    }
+
+    watch(showLabelStats, async (v) => { if (v) { const d=await api('GET','/label-stats'); statsData.value=d; }});
+
+    function handlePieClick(e) {
+      const svg = e.currentTarget;
+      const rect = svg.getBoundingClientRect();
+      const sx = (e.clientX-rect.left)/rect.width*240;
+      const sy = (e.clientY-rect.top)/rect.height*240;
+      const cx=120,cy=120,r=96,hole=48;
+      const dx=sx-cx,dy=sy-cy;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      if (dist>r) return;
+      if (dist<hole) { filterByLabel(null); return; }
+      let ang = Math.atan2(dy,dx);
+      for (const slice of pieSlices.value) {
+        const end = slice.startAngle + slice.ext;
+        let a = ang; if (a<slice.startAngle && a+Math.PI*2<=end) a+=Math.PI*2;
+        if (a>=slice.startAngle && a<end) { filterByLabel(slice.name); return; }
+      }
+    }
+
+    // ── File operations ────────────────────────────────
+    async function deleteCurrentConfirm() {
+      if (!curName.value) return;
+      const name = curName.value;
+      if (!confirm(`确认删除 "${name}" 的所有关联文件？`)) return;
+      const data = await api('POST', '/delete', {name});
+      if (data.errors?.length) alert('部分删除失败：\n'+data.errors.join('\n'));
+      applyState(data);
+      modified.value = false;
+      imgTs.value = Date.now();
+    }
+
+    watch(showRename, (v) => { if (v) renameInput.value = curName.value || ''; });
+
+    async function confirmRename() {
+      if (!renameInput.value.trim() || renameInput.value.trim()===curName.value) { showRename.value=false; return; }
+      try {
+        const data = await api('POST', '/rename', {old_name:curName.value, new_name:renameInput.value.trim()});
+        if (data.errors?.length) alert('部分重命名失败：\n'+data.errors.join('\n'));
+        applyState(data);
+        showRename.value = false;
+        imgTs.value = Date.now();
+      } catch(e) { alert(e.message); }
+    }
+
+    // ── Batch rename ───────────────────────────────────
+    watch(showBatchRename, (v) => { if (v) nextTick(updateRnPreview); });
+    watch([rnMode,rnPrefix,rnStart,rnDigits,rnFind,rnRepl], updateRnPreview);
+
+    function calcNewNames() {
+      const names = st.list_items.map(i=>i.name);
+      if (rnMode.value==='prefix') {
+        const start = parseInt(rnStart.value)||1, digits=Math.max(1,parseInt(rnDigits.value)||3);
+        return names.map((n,i)=>rnPrefix.value+String(start+i).padStart(digits,'0'));
+      } else {
+        return names.map(n=>rnFind.value?n.replaceAll(rnFind.value,rnRepl.value):n);
+      }
+    }
+
+    function updateRnPreview() {
+      const names = st.list_items.map(i=>i.name);
+      const newNames = calcNewNames();
+      const existing = new Set(names);
+      const seen = {};
+      const rows = [];
+      let conflicts = 0;
+      for (let i=0;i<names.length;i++) {
+        const changed = names[i]!==newNames[i];
+        const clash = existing.has(newNames[i]) && newNames[i]!==names[i];
+        const dup = seen[newNames[i]];
+        const conflict = clash || dup;
+        if (conflict) conflicts++;
+        seen[newNames[i]] = true;
+        rows.push({old:names[i], new:newNames[i], changed, conflict});
+      }
+      rnPreview.value = rows;
+      const changed = rows.filter(r=>r.changed).length;
+      rnConflictMsg.value = conflicts>0 ? `⚠ ${conflicts} 个条目存在冲突，确认后会跳过` : `共 ${names.length} 项，变更 ${changed} 项`;
+    }
+
+    async function confirmBatchRename() {
+      const old_names = st.list_items.map(i=>i.name);
+      const new_names = calcNewNames();
+      const data = await api('POST', '/batch-rename', {old_names, new_names});
+      const r = data.batch_result;
+      let msg = `已重命名 ${r.done} 项`;
+      if (r.skipped?.length) msg += `\n跳过 ${r.skipped.length} 项`;
+      if (r.errors?.length) msg += `\n错误 ${r.errors.length} 条`;
+      alert(msg);
+      applyState(data);
+      showBatchRename.value = false;
+      imgTs.value = Date.now();
+    }
+
+    // ── Swap ref ───────────────────────────────────────
+    const swapRefListEl = ref(null);
+    watch(showSwapRef, (v) => {
+      if (v) {
+        swapRefTarget.value = null;
+        // 打开时自动定位到第一个有参考图的候选
+        nextTick(() => {
+          const first = swapRefCandidates.value.find(n => hasRef(n)) || swapRefCandidates.value[0];
+          if (first) swapRefTarget.value = first;
+        });
+      }
+    });
+
+    async function confirmSwapRef() {
+      if (!swapRefTarget.value) return;
+      try {
+        const data = await api('POST', '/swap-ref', {name_a:curName.value, name_b:swapRefTarget.value});
+        if (data.status==='both_none') { alert('两组都没有参考图，无需交换'); return; }
+        applyState(data);
+        showSwapRef.value = false;
+        imgTs.value = Date.now();
+      } catch(e) { alert('交换失败：'+e.message); }
+    }
+
+    async function confirmCopy() {
+      if (!copyDstPath.value.trim()) return;
+      const names = selectedIndices.value.length>0
+        ? selectedIndices.value.filter(i=>i<st.list_items.length).map(i=>st.list_items[i].name)
+        : (curName.value ? [curName.value] : []);
+      if (!names.length) { alert('请先选择图片'); return; }
+      try {
+        const r = await api('POST', '/copy-groups', {names, dst:copyDstPath.value.trim()});
+        alert(`已复制 ${r.ok} 组到：${r.dst}` + (r.fail?.length?`\n失败 ${r.fail.length} 个`:''));
+        showCopyDst.value = false;
+      } catch(e) { alert(e.message); }
+    }
+
+    async function alignCrop() {
+      if (!curName.value) return;
+      try {
+        const data = await api('POST', '/align-crop', {name:curName.value});
+        if (data.align_result?.status==='already_same') { alert('两张图尺寸已一致'); return; }
+        applyState(data);
+        imgTs.value = Date.now();
+      } catch(e) { alert(e.message); }
+    }
+
+    async function batchAlignCrop() {
+      if (!confirm('对当前筛选的图进行批量对齐裁切？此操作将覆盖原文件。')) return;
+      const data = await api('POST', '/batch-align-crop');
+      const r = data.batch_result;
+      alert(`批量对齐完成\n成功 ${r.ok} 对  跳过 ${r.skipped}（已一致）  失败 ${r.err}`);
+      applyState(data);
+      imgTs.value = Date.now();
+    }
+
+    // ── Batch tag ops ──────────────────────────────────
+    async function batchAdd() {
+      const tag = prompt(`对当前筛选的 ${st.filtered_count} 个文件操作\n输入 Tag（逗号分隔多个）：`);
+      if (!tag) return;
+      const data = await api('POST', '/batch-add-tag', {tag});
+      alert(`已添加 Tag，影响 ${data.count} 个文件`);
+      applyState(data);
+    }
+
+    async function batchDel() {
+      const tag = prompt(`对当前筛选的 ${st.filtered_count} 个文件操作\n输入要删除的 Tag（模糊匹配）：`);
+      if (!tag) return;
+      const data = await api('POST', '/batch-del-tag', {tag});
+      alert(`已删除含 "${tag}" 的 Tag，影响 ${data.count} 个文件`);
+      applyState(data);
+    }
+
+    async function batchReplace() {
+      const oldTag = prompt('输入要替换的旧 Tag：');
+      if (!oldTag) return;
+      const newTag = prompt(`旧 Tag：${oldTag}\n输入新 Tag（留空则删除）：`) || '';
+      const data = await api('POST', '/batch-replace-tag', {old_tag:oldTag, new_tag:newTag});
+      alert(`"${oldTag}" → "${newTag||'（删除）'}"，影响 ${data.count} 个文件`);
+      applyState(data);
+    }
+
+    // ── Translate ──────────────────────────────────────
+    async function translateTags() {
+      if (!editTags.value.length) return;
+      const text = editTags.value.join(', ');
+      try {
+        const r = await api('POST', '/translate', {text});
+        translateResult.value = r.result;
+      } catch(e) { translateResult.value = '翻译失败：' + e.message; }
+    }
+
+    // ── Zoom ──────────────────────────────────────────
+    function zoomImage(key) {
+      if (!curName.value || !hasFile(key)) return;
+      zoomSrc.value = `/api/image/${key}/${encodeURIComponent(curName.value)}?t=${imgTs.value}`;
+    }
+
+    // ── Panel sash resize ──────────────────────────────
+    function startSash(which, e) {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startLeft  = leftW.value;
+      const startRight = rightW.value;
+      const startThumb = thumbH.value;
+      const startTag   = tagH.value;
+
+      const sashEl = e.currentTarget;
+      sashEl.classList.add('dragging');
+
+      const bodyClass = (which === 'left' || which === 'right') ? 'dragging-v' : 'dragging-h';
+      document.body.classList.add(bodyClass);
+
+      function onMove(ev) {
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+        if (which === 'left') {
+          leftW.value  = Math.max(160, Math.min(500, startLeft  + dx));
+        } else if (which === 'right') {
+          rightW.value = Math.max(160, Math.min(500, startRight - dx));
+        } else if (which === 'thumb') {
+          thumbH.value = Math.max(68,  Math.min(400, startThumb + dy));
+        } else if (which === 'tag') {
+          tagH.value   = Math.max(100, Math.min(600, startTag   - dy));
+        }
+      }
+      function onUp() {
+        sashEl.classList.remove('dragging');
+        document.body.classList.remove(bodyClass);
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup',   onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup',   onUp);
+    }
+
+    // ── Thumbnail scroll ───────────────────────────────
+    function onThumbWheel(e) {
+      if (thumbStrip.value) thumbStrip.value.scrollLeft += e.deltaY;
+    }
+
+    // ── Project management ─────────────────────────────
+    function formatDate(iso) {
+      if (!iso) return '—';
+      try {
+        const d = new Date(iso);
+        const y = d.getFullYear(), mo = String(d.getMonth()+1).padStart(2,'0');
+        const da = String(d.getDate()).padStart(2,'0');
+        const h = String(d.getHours()).padStart(2,'0'), mi = String(d.getMinutes()).padStart(2,'0');
+        return `${y}-${mo}-${da} ${h}:${mi}`;
+      } catch { return iso; }
+    }
+
+    async function loadProjects() {
+      try {
+        const r = await api('GET', '/projects');
+        projectList.value = r.projects || [];
+        // 若有 last_id 且 currentProject 为 null，同步已打开的项目信息
+        if (r.last_id && !currentProject.value) {
+          currentProject.value = projectList.value.find(p => p.id === r.last_id) || null;
+        }
+      } catch(e) {}
+    }
+
+    async function openProjectManager() {
+      await loadProjects();
+      newProjName.value = '';
+      newProjNote.value = '';
+      showProjects.value = true;
+    }
+
+    async function createProject() {
+      if (!newProjName.value.trim()) return;
+      try {
+        const data = await api('POST', '/projects', {
+          name: newProjName.value.trim(),
+          note: newProjNote.value.trim(),
+          dirs: st.dirs,
+          mode: st.mode,
+          label_defs: st.label_defs,
+        });
+        currentProject.value = data.project;
+        await loadProjects();
+        newProjName.value = '';
+        newProjNote.value = '';
+        // 加载项目的状态（目录等）
+        applyState(data);
+        modified.value = false;
+        imgTs.value = Date.now();
+      } catch(e) { alert('创建项目失败：' + e.message); }
+    }
+
+    async function openProject(pid) {
+      try {
+        const data = await api('POST', `/projects/${pid}/open`);
+        currentProject.value = data.project;
+        applyState(data);
+        modified.value = false;
+        imgTs.value = Date.now();
+        showProjects.value = false;
+      } catch(e) { alert('打开项目失败：' + e.message); }
+    }
+
+    async function saveCurrentProject() {
+      if (!currentProject.value) return;
+      try {
+        const r = await api('POST', `/projects/${currentProject.value.id}/save`, {
+          dirs: st.dirs,
+          mode: st.mode,
+          label_defs: st.label_defs,
+        });
+        currentProject.value = r.project;
+        await loadProjects();
+        alert(`已保存到项目"${r.project.name}"`);
+      } catch(e) { alert('保存项目失败：' + e.message); }
+    }
+
+    async function deleteProject(pid) {
+      const proj = projectList.value.find(p => p.id === pid);
+      if (!proj) return;
+      if (!confirm(`确认删除项目"${proj.name}"？\n（仅删除项目记录，不影响目录文件）`)) return;
+      try {
+        const r = await api('DELETE', `/projects/${pid}`);
+        projectList.value = r.projects;
+        if (currentProject.value?.id === pid) currentProject.value = null;
+      } catch(e) { alert('删除失败：' + e.message); }
+    }
+
+    // ── AI Caption ─────────────────────────────────────
+    async function captionStartService() {
+      await api('POST', '/caption/start');
+      setTimeout(loadState, 500);
+    }
+
+    async function captionCurrent() {
+      if (!curName.value) return;
+      const data = await api('POST', '/caption/run', {name:curName.value, model:capModel.value});
+      if (data.caption_result?.status==='ok') {
+        editTags.value = data.caption_result.tags;
+        modified.value = false;
+      }
+      applyState(data);
+    }
+
+    async function captionBatch() {
+      alert('批量标注已提交（功能建设中，请使用单图标注）');
+    }
+
+    async function captionStop() {
+      await api('POST', '/caption/stop');
+      await loadState();
+    }
+
+    // ── Keyboard ───────────────────────────────────────
+    function onKeyDown(e) {
+      if (e.target.tagName==='INPUT' || e.target.tagName==='TEXTAREA') return;
+
+      // 交换参考图弹窗：上下键在候选列表里移动
+      if (showSwapRef.value) {
+        if (e.key==='ArrowUp' || e.key==='ArrowDown') {
+          e.preventDefault();
+          const list = swapRefCandidates.value;
+          if (!list.length) return;
+          const idx = swapRefTarget.value ? list.indexOf(swapRefTarget.value) : -1;
+          const next = e.key==='ArrowUp'
+            ? Math.max(0, idx - 1)
+            : Math.min(list.length - 1, idx + 1);
+          swapRefTarget.value = list[next];
+          // 自动滚动列表保持选中项可见
+          nextTick(() => {
+            const el = swapRefListEl.value;
+            if (!el) return;
+            const items = el.querySelectorAll('.list-item');
+            if (items[next]) items[next].scrollIntoView({ block: 'nearest' });
+          });
+        }
+        if (e.key==='Escape') showSwapRef.value = false;
+        if (e.key==='Enter' && swapRefTarget.value) confirmSwapRef();
+        return;
+      }
+
+      if (e.key==='ArrowLeft'||e.key==='ArrowUp') { e.preventDefault(); navigate(-1); }
+      if (e.key==='ArrowRight'||e.key==='ArrowDown') { e.preventDefault(); navigate(1); }
+      if (e.ctrlKey && e.key==='s') { e.preventDefault(); saveTags(); }
+      if (e.ctrlKey && e.key==='r') { e.preventDefault(); showRename.value=true; }
+      if (e.key==='Delete') deleteCurrentConfirm();
+      if (e.key==='Escape') { zoomSrc.value=null; translateResult.value=null; }
+      // Number keys 1-9 for label shortcuts
+      const n = parseInt(e.key);
+      if (n>=1&&n<=9&&!e.ctrlKey&&!e.altKey) {
+        const defn = st.label_defs[n-1];
+        if (defn) setLabel(defn.name);
+      }
+    }
+
+    // ── WebSocket ──────────────────────────────────────
+    let ws = null;
+    function connectWS() {
+      ws = new WebSocket(`ws://${location.host}/ws`);
+      ws.onmessage = () => loadState();
+      ws.onclose = () => setTimeout(connectWS, 3000);
+    }
+
+    // ── Lifecycle ──────────────────────────────────────
+    onMounted(async () => {
+      await loadState();
+      // 自动打开上次项目
+      try {
+        const r = await api('GET', '/projects');
+        projectList.value = r.projects || [];
+        if (r.last_id && r.projects?.length) {
+          const data = await api('POST', `/projects/${r.last_id}/open`);
+          currentProject.value = data.project;
+          applyState(data);
+          imgTs.value = Date.now();
+        }
+      } catch(e) {}
+      connectWS();
+      document.addEventListener('keydown', onKeyDown);
+    });
+
+    onUnmounted(() => {
+      document.removeEventListener('keydown', onKeyDown);
+      ws?.close();
+    });
+
+    // Scroll cap log to bottom
+    watch(() => st.cap_log?.length, () => {
+      nextTick(() => { if (capLogEl.value) capLogEl.value.scrollTop=capLogEl.value.scrollHeight; });
+    });
+
+    // Scroll thumb strip to current
+    watch(() => st.cur, (cur) => {
+      nextTick(() => {
+        const strip = thumbStrip.value;
+        if (!strip || cur<0) return;
+        const cols = strip.querySelectorAll('.thumb-col');
+        if (cols[cur]) cols[cur].scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'});
+      });
+    });
+
+    return {
+      st, modified, isDark, toggleDark,
+      editTags, tagInput, tagSearchInput, globalTagSearch,
+      selectedIndices, selectedSet, lastClickIdx,
+      leftW, rightW, thumbH, tagH,
+      dirInputKey, dirInputPath, dirCfgs, showDirKey, dirName, anyDirSelected, anySelected,
+      activePanels, filterBtns, statsText, filteredGlobalTags, curTagSet, labelColors,
+      swapRefCandidates, pieSlices, ringSlices, statsRows, labelFilterColor, resInfo, imgTs,
+      curName, hasFile, hasRef, itemColor,
+      showRename, renameInput, showBatchRename, rnMode, rnPrefix, rnStart, rnDigits,
+      rnFind, rnRepl, rnPreview, rnConflictMsg,
+      showSwapRef, swapRefTarget, showCopyDst, copyDstPath,
+      showManageLabels, labelRows, showLabelStats, statsData,
+      showCaption, capModel, capOverwrite, zoomSrc, translateResult,
+      thumbStrip, capLogEl, swapRefListEl,
+      toastMsg,
+      showProjects, projectList, currentProject, newProjName, newProjNote,
+      openDirInput, browseDirNative, browseAndSetPath, confirmDirInput,
+      refresh, setMode, navigate, navigateTo, setFilter, onTagSearch, clearTagFilter, clearLabelFilter,
+      clickItem, ctrlClick, shiftClick,
+      addTagFromInput, removeTag, renameTag, saveTags, addGlobalTag, filterByGlobalTag,
+      labelBtnStyle, setLabel, filterByLabel, cycleColor, saveLabelDefs, handlePieClick,
+      deleteCurrentConfirm, confirmRename, updateRnPreview, calcNewNames, confirmBatchRename,
+      confirmSwapRef, confirmCopy, alignCrop, batchAlignCrop,
+      batchAdd, batchDel, batchReplace, translateTags, zoomImage,
+      onThumbWheel, startSash,
+      captionStartService, captionCurrent, captionBatch, captionStop,
+      openProjectManager, createProject, openProject, saveCurrentProject, deleteProject, formatDate,
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>

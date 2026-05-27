@@ -14,6 +14,6 @@ if errorlevel 1 (
 )
 
 echo Checking dependencies...
-python -m pip install --quiet --disable-pip-version-check pillow send2trash
+python -m pip install --quiet --disable-pip-version-check pillow send2trash fastapi uvicorn python-multipart
 
-python lora_reviewer.py
+python main_web.py
