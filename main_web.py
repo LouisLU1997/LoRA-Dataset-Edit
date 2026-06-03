@@ -66,12 +66,16 @@ class AppState:
         self.cur: int = -1
         self.filter_mode: str = 'all'
         self.tag_filter: Optional[str] = None
+        self._tag_filter_neg: bool = False
         self._label_defs: List[dict] = []
         self._labels: Dict[str, str] = {}
         self._label_filter: Optional[str] = None
         self.mode: str = 'one'
         self._res_mismatch: set = set()
         self._thumb_cache: Dict[str, bytes] = {}  # "key:name" -> jpeg bytes
+
+        # Pairing mode
+        self._pair_folders: Dict[str, Optional[Path]] = {'a': None, 'b': None}
 
         # AI captioning
         self._cap_proc = None
@@ -107,6 +111,7 @@ class AppState:
             self.cur = -1
             self.filter_mode = 'all'
             self.tag_filter = None
+            self._tag_filter_neg = False
             self._label_filter = None
             self._res_mismatch = set()
             self._thumb_cache = {}
@@ -183,6 +188,7 @@ class AppState:
             'filtered_count': len(self.filtered),
             'filter_mode': self.filter_mode,
             'tag_filter': self.tag_filter,
+            'tag_filter_neg': self._tag_filter_neg,
             'label_defs': self._label_defs,
             'labels': self._labels,
             'label_filter': self._label_filter,
@@ -280,9 +286,15 @@ class AppState:
 
         if self.tag_filter:
             tf = self.tag_filter
-            base = [n for n in base
-                    if any(t.strip().lower().startswith(tf)
-                           for t in self.txt_content.get(n, '').split(','))]
+            def _has_tag(n):
+                tags = [t.strip().lower() for t in self.txt_content.get(n, '').split(',')]
+                if self._tag_filter_neg:
+                    # 反向：精确匹配，不含该 tag 的才留下
+                    return tf not in tags
+                else:
+                    # 正向：前缀匹配，含该 tag（或以该字符串开头的 tag）的留下
+                    return any(t.startswith(tf) for t in tags)
+            base = [n for n in base if _has_tag(n)]
         if self._label_filter is not None:
             if self._label_filter == '__unlabeled__':
                 base = [n for n in base if not self._labels.get(n)]
@@ -836,8 +848,12 @@ class AppState:
             self._cap_pending.pop(req_id, None)
             callback('', '服务未运行')
 
-    def caption_current(self, name: str, model: str):
+    def caption_current(self, name: str, model: str, overwrite: str = 'skip'):
         self._cap_model = model
+        # skip：已有 txt 内容则直接跳过
+        if overwrite == 'skip' and name in self.txt_files and self.txt_content.get(name, '').strip():
+            self._cap_log_add(f'⏭ {name} 已有标注，跳过', 'yellow')
+            return {'status': 'skipped'}
         if not self._cap_ready:
             self.cap_start_service()
             return {'status': 'starting'}
@@ -853,10 +869,17 @@ class AppState:
             self._do_caption_one(name, cb)
             event.wait(timeout=120)
             if result_holder['result']:
-                tags = [t.strip() for t in result_holder['result'].split(',') if t.strip()]
-                self.save_tags(name, tags)
-                self._cap_log_add(f'✓ {name} 标注完成', 'green')
-                return {'status': 'ok', 'tags': tags}
+                new_tags = [t.strip() for t in result_holder['result'].split(',') if t.strip()]
+                if overwrite == 'append':
+                    existing = [t.strip() for t in self.txt_content.get(name, '').split(',') if t.strip()]
+                    merged = existing + [t for t in new_tags if t not in existing]
+                    self.save_tags(name, merged)
+                    self._cap_log_add(f'✓ {name} 追加完成（+{len(new_tags)}）', 'green')
+                    return {'status': 'ok', 'tags': merged}
+                else:  # overwrite
+                    self.save_tags(name, new_tags)
+                    self._cap_log_add(f'✓ {name} 标注完成', 'green')
+                    return {'status': 'ok', 'tags': new_tags}
             else:
                 return {'status': 'error', 'msg': result_holder['error']}
         else:
@@ -998,6 +1021,7 @@ class FilterReq(BaseModel):
 
 class TagFilterReq(BaseModel):
     tag: Optional[str] = None
+    negative: bool = False
 
 class LabelFilterReq(BaseModel):
     label: Optional[str] = None
@@ -1023,6 +1047,10 @@ class BatchRenameReq(BaseModel):
 class BatchTagReq(BaseModel):
     tag: str
 
+class BatchTagItemsReq(BaseModel):
+    names: List[str]
+    tags: List[str]
+
 class BatchReplaceTagReq(BaseModel):
     old_tag: str
     new_tag: str
@@ -1044,6 +1072,7 @@ class SetModeReq(BaseModel):
 class CaptionReq(BaseModel):
     name: str
     model: str = 'wd14'
+    overwrite: str = 'skip'  # 'skip' | 'append' | 'overwrite'
 
 class TranslateReq(BaseModel):
     text: str
@@ -1063,6 +1092,20 @@ class SaveProjectReq(BaseModel):
 class UpdateProjectReq(BaseModel):
     name: Optional[str] = None
     note: Optional[str] = None
+
+class PairSetFolderReq(BaseModel):
+    side: str   # 'a' or 'b'
+    path: str
+
+class PairItem(BaseModel):
+    a: str      # filename in folder a
+    b: str      # filename in folder b
+    name: str   # output group name
+
+class PairExecuteReq(BaseModel):
+    pairs: List[PairItem]
+    out_input: Optional[str] = None
+    out_result: Optional[str] = None
 
 
 # ── 路由 ─────────────────────────────────────────────
@@ -1122,6 +1165,7 @@ def set_filter(req: FilterReq):
 @app.post('/api/set-tag-filter')
 def set_tag_filter(req: TagFilterReq):
     state.tag_filter = req.tag.strip().lower() if req.tag else None
+    state._tag_filter_neg = req.negative
     state._apply()
     return state.snapshot()
 
@@ -1248,6 +1292,25 @@ def batch_add_tag(req: BatchTagReq):
     return snap
 
 
+@app.post('/api/add-tags-to-items')
+def add_tags_to_items(req: BatchTagItemsReq):
+    """给指定的一批图片追加 tags（去重）"""
+    count = 0
+    for name in req.names:
+        existing = [t.strip() for t in state.txt_content.get(name, '').split(',') if t.strip()]
+        changed = False
+        for tag in req.tags:
+            if tag and tag not in existing:
+                existing.append(tag)
+                changed = True
+        if changed:
+            state.save_tags(name, existing)
+            count += 1
+    snap = state.snapshot()
+    snap['count'] = count
+    return snap
+
+
 @app.post('/api/batch-del-tag')
 def batch_del_tag(req: BatchTagReq):
     count = state.batch_del_tag(req.tag)
@@ -1341,7 +1404,7 @@ def cap_start():
 
 @app.post('/api/caption/run')
 def cap_run(req: CaptionReq):
-    result = state.caption_current(req.name, req.model)
+    result = state.caption_current(req.name, req.model, req.overwrite)
     snap = state.snapshot()
     snap['caption_result'] = result
     return snap
@@ -1383,6 +1446,82 @@ async def websocket_endpoint(ws: WebSocket):
     finally:
         if ws in state._ws_clients:
             state._ws_clients.remove(ws)
+
+
+# ── 配对模式 ──────────────────────────────────────────
+
+@app.get('/api/pair/image/{side}/{filename}')
+def pair_image(side: str, filename: str):
+    folder = state._pair_folders.get(side)
+    if not folder:
+        raise HTTPException(404, 'Folder not set')
+    p = folder / filename
+    if not p.exists() or p.parent.resolve() != folder.resolve():
+        raise HTTPException(404, 'File not found')
+    return FileResponse(str(p))
+
+
+@app.post('/api/pair/set-folder')
+def pair_set_folder(req: PairSetFolderReq):
+    p = Path(req.path)
+    if not p.exists() or not p.is_dir():
+        raise HTTPException(400, f'目录不存在：{req.path}')
+    state._pair_folders[req.side] = p
+    files = sorted(
+        [f.name for f in p.iterdir() if f.is_file() and f.suffix.lower() in IMAGE_EXTS],
+        key=lambda x: state._nkey(x)
+    )
+    return {'files': files, 'path': str(p)}
+
+
+@app.get('/api/pair/thumb/{side}/{filename}')
+def pair_thumb(side: str, filename: str):
+    folder = state._pair_folders.get(side)
+    if not folder:
+        raise HTTPException(404, 'Folder not set')
+    p = folder / filename
+    if not p.exists() or p.parent.resolve() != folder.resolve():
+        raise HTTPException(404, 'File not found')
+    try:
+        img = Image.open(p)
+        img.thumbnail((200, 140), Image.LANCZOS)
+        buf = io.BytesIO()
+        if img.mode not in ('RGB',):
+            img = img.convert('RGB')
+        img.save(buf, 'JPEG', quality=75)
+        return Response(content=buf.getvalue(), media_type='image/jpeg')
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.post('/api/pair/execute')
+def pair_execute(req: PairExecuteReq):
+    folder_a = state._pair_folders.get('a')
+    folder_b = state._pair_folders.get('b')
+    if not folder_a or not folder_b:
+        raise HTTPException(400, '请先设置两个文件夹')
+
+    out_inp = Path(req.out_input) if req.out_input else (state.dirs.get('input') or folder_a.parent / 'paired_input')
+    out_res = Path(req.out_result) if req.out_result else (state.dirs.get('result') or folder_b.parent / 'paired_result')
+    out_inp.mkdir(parents=True, exist_ok=True)
+    out_res.mkdir(parents=True, exist_ok=True)
+
+    ok, errors = 0, []
+    for pair in req.pairs:
+        try:
+            for src_dir, out_dir in [(folder_a / pair.a, out_inp / f'{pair.name}.png'),
+                                      (folder_b / pair.b, out_res / f'{pair.name}.png')]:
+                img = Image.open(src_dir)
+                if img.mode == 'RGBA':
+                    img.save(out_dir, 'PNG')
+                else:
+                    img.convert('RGB').save(out_dir, 'PNG')
+            ok += 1
+        except Exception as e:
+            errors.append(f'{pair.name}: {e}')
+
+    return {'ok': ok, 'errors': errors,
+            'out_input': str(out_inp), 'out_result': str(out_res)}
 
 
 # ── 浏览器目录选择（native dialog）─────────────────────

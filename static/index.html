@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DataTag Studio</title>
-<link rel="icon" href="/static/logo.ico" type="image/x-icon">
+<link rel="icon" href="/static/app_icon.ico" type="image/x-icon">
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
@@ -281,6 +281,13 @@
   <span class="logo-title" style="font-size:17px;font-weight:700;letter-spacing:-.01em;margin-right:4px;flex-shrink:0;">DataTag Studio</span>
   <div class="toolbar-sep"></div>
 
+  <!-- 主模式切换 -->
+  <div class="mode-group" style="flex-shrink:0;">
+    <button class="mode-btn" :class="{active: uiMode==='annotate'}" @click="uiMode='annotate'">✏ 标注</button>
+    <button class="mode-btn" :class="{active: uiMode==='pair'}" @click="uiMode='pair'">🔗 配对</button>
+  </div>
+  <div class="toolbar-sep"></div>
+
   <!-- 项目区（紧贴标题）-->
   <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
     <!-- 当前项目名 chip -->
@@ -308,22 +315,25 @@
 
   <div style="flex:1;"></div>
 
-  <!-- 右侧控件 -->
-  <span v-if="modified" class="unsaved-badge" style="color:var(--yellow);font-size:12px;font-weight:600;background:#fff8e8;padding:3px 10px;border-radius:20px;border:1px solid #f5d070;">● 未保存</span>
-  <button class="btn btn-accent" :disabled="st.cur<0" @click="saveTags()">💾 保存  Ctrl+S</button>
-  <div class="toolbar-sep"></div>
-  <button class="btn btn-yellow" style="border-color:var(--border);" :disabled="!st.has_ref_dir||st.cur<0" @click="showSwapRef=true">⇄ 交换参考图</button>
-  <button class="btn" :disabled="!anySelected && st.cur<0" @click="showCopyDst=true">📋 复制组</button>
-  <button class="btn btn-red" style="border-color:var(--border);" :disabled="st.cur<0" @click="deleteCurrentConfirm()">🗑 删除  Del</button>
-  <div class="toolbar-sep"></div>
-  <button class="btn" style="padding:5px 10px;" :disabled="st.cur<=0" @click="navigate(-1)">◀</button>
-  <span class="mono" style="font-size:12px;color:var(--text-dim);min-width:60px;text-align:center;background:var(--surface2);padding:4px 8px;border-radius:6px;border:1px solid var(--border);">{{st.cur>=0?st.cur+1:0}} / {{st.filtered_count||0}}</span>
-  <button class="btn" style="padding:5px 10px;" :disabled="st.cur<0||st.cur>=st.filtered_count-1" @click="navigate(1)">▶</button>
-  <div class="toolbar-sep"></div>
-  <button class="btn ai-btn" style="color:var(--accent);border-color:var(--accent);font-weight:600;background:rgba(67,100,247,0.06);" @click="showCaption=true">🤖 AI 标注</button>
+  <!-- 右侧控件（仅标注模式）-->
+  <template v-if="uiMode==='annotate'">
+    <span v-if="modified" class="unsaved-badge" style="color:var(--yellow);font-size:12px;font-weight:600;background:#fff8e8;padding:3px 10px;border-radius:20px;border:1px solid #f5d070;">● 未保存</span>
+    <button class="btn btn-accent" :disabled="st.cur<0" @click="saveTags()">💾 保存  Ctrl+S</button>
+    <div class="toolbar-sep"></div>
+    <button class="btn btn-yellow" style="border-color:var(--border);" :disabled="!st.has_ref_dir||st.cur<0" @click="showSwapRef=true">⇄ 交换参考图</button>
+    <button class="btn" :disabled="!anySelected && st.cur<0" @click="showCopyDst=true">📋 复制组</button>
+    <button class="btn btn-red" style="border-color:var(--border);" :disabled="st.cur<0" @click="deleteCurrentConfirm()">🗑 删除  Del</button>
+    <div class="toolbar-sep"></div>
+    <button class="btn" style="padding:5px 10px;" :disabled="st.cur<=0" @click="navigate(-1)">◀</button>
+    <span class="mono" style="font-size:12px;color:var(--text-dim);min-width:60px;text-align:center;background:var(--surface2);padding:4px 8px;border-radius:6px;border:1px solid var(--border);">{{st.cur>=0?st.cur+1:0}} / {{st.filtered_count||0}}</span>
+    <button class="btn" style="padding:5px 10px;" :disabled="st.cur<0||st.cur>=st.filtered_count-1" @click="navigate(1)">▶</button>
+    <div class="toolbar-sep"></div>
+    <button class="btn ai-btn" style="color:var(--accent);border-color:var(--accent);font-weight:600;background:rgba(67,100,247,0.06);" @click="showCaption=true">🤖 AI 标注</button>
+  </template>
 </div>
 
-<!-- ═══ 主体三栏 ═══ -->
+<!-- ═══ 主体三栏（标注模式）═══ -->
+<template v-if="uiMode==='annotate'">
 <div style="flex:1;display:flex;overflow:hidden;min-height:0;gap:6px;padding:6px;background:var(--bg);">
 
   <!-- ▌左侧：文件列表 ▌ -->
@@ -350,7 +360,10 @@
     <!-- Tag 搜索 -->
     <div style="padding:6px 8px;display:flex;gap:4px;align-items:center;border-bottom:1px solid var(--border);">
       <span style="font-size:11px;color:var(--text-dim);">🔍</span>
-      <input v-model="tagSearchInput" @input="onTagSearch" style="flex:1;font-size:12px;" class="mono" placeholder="Tag 前缀搜索…">
+      <input v-model="tagSearchInput" @input="onTagSearch" style="flex:1;font-size:12px;" class="mono" :placeholder="st.tag_filter_neg?'排除 Tag…':'Tag 前缀搜索…'">
+      <button class="btn" style="padding:2px 8px;font-size:11px;font-weight:600;"
+        :style="st.tag_filter_neg?{background:'var(--red)',color:'#fff',borderColor:'var(--red)'}:{}"
+        @click="toggleTagNeg()" title="反向筛选：排除含此 Tag 的图">非</button>
       <button class="btn" style="padding:2px 8px;font-size:12px;" @click="clearTagFilter()">×</button>
     </div>
 
@@ -515,8 +528,10 @@
       <div style="border-top:1px solid var(--border);padding:6px 10px;display:flex;align-items:center;gap:6px;background:var(--surface2);">
         <span style="color:var(--accent);font-size:16px;font-weight:700;">＋</span>
         <input v-model="tagInput" @keydown.enter="addTagFromInput" @keydown.tab.prevent="addTagFromInput"
-          style="flex:1;font-size:12px;" class="mono" placeholder="输入 Tag，逗号分隔多个，回车确认">
-        <span style="font-size:10px;color:var(--text-mut);">回车确认</span>
+          style="flex:1;font-size:12px;" class="mono" :placeholder="selectedIndices.length>1?'输入 Tag 直接添加到已选项…':'输入 Tag，逗号分隔多个，回车确认'">
+        <span style="font-size:10px;color:var(--text-mut);white-space:nowrap;">
+          {{selectedIndices.length>1 ? '回车→已选'+selectedIndices.length+'项' : '回车确认'}}
+        </span>
       </div>
     </div>
 
@@ -538,7 +553,9 @@
     </div>
     <!-- 筛选状态 -->
     <div v-if="st.tag_filter" style="background:rgba(67,100,247,0.06);padding:4px 8px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);">
-      <span style="font-size:11px;color:var(--accent);font-weight:600;">筛选：{{st.tag_filter}}</span>
+      <span style="font-size:11px;font-weight:600;" :style="{color: st.tag_filter_neg ? 'var(--red)' : 'var(--accent)'}">
+        {{st.tag_filter_neg ? '排除：' : '筛选：'}}{{st.tag_filter}}
+      </span>
       <button class="btn" style="padding:1px 6px;font-size:11px;" @click="clearTagFilter()">× 清除</button>
     </div>
     <!-- Tag 列表 -->
@@ -551,7 +568,7 @@
         style="position:relative;">
         <span class="mono" style="color:var(--yellow);min-width:28px;text-align:right;flex-shrink:0;">{{cnt}}</span>
         <span class="ellipsis mono" style="flex:1;">{{tag}}</span>
-        <span class="global-tag-add" @click.stop="addGlobalTag(tag)" title="添加到当前图">＋</span>
+        <span class="global-tag-add" @click.stop="addGlobalTag(tag)" :title="selectedIndices.length>1?'添加到已选'+selectedIndices.length+'项':'添加到当前图'">＋</span>
       </div>
     </div>
     <div style="padding:3px 8px 6px;font-size:10px;color:var(--text-mut);text-align:center;border-top:1px solid var(--border);background:var(--surface2);">单击筛选 · ＋ 添加</div>
@@ -570,6 +587,102 @@
   </div>
 
 </div><!-- end main -->
+</template><!-- end annotate mode -->
+
+<!-- ═══ 配对模式 ═══ -->
+<div v-if="uiMode==='pair'" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;padding:6px;gap:6px;background:var(--bg);">
+
+  <!-- 顶部：两个文件夹选择 + 输出设置 -->
+  <div style="display:flex;gap:8px;align-items:center;background:var(--surface);border-radius:10px;padding:10px 14px;box-shadow:var(--shadow);flex-shrink:0;">
+    <!-- 文件夹 A -->
+    <span style="font-size:12px;font-weight:700;color:var(--green);flex-shrink:0;">A 来源</span>
+    <button class="btn" style="color:var(--green);border-color:var(--green);" @click="pairBrowse('a')">📂 选择</button>
+    <span style="font-size:11px;color:var(--text-dim);background:var(--surface2);padding:3px 10px;border-radius:5px;border:1px solid var(--border);max-width:180px;" class="ellipsis" :title="pairFolderPath.a">
+      {{pairFolderPath.a ? pairFolderPath.a.split(/[\\/]/).pop() + '（'+pairFiles.a.length+'张）' : '未选择'}}
+    </span>
+    <div class="toolbar-sep"></div>
+    <!-- 文件夹 B -->
+    <span style="font-size:12px;font-weight:700;color:var(--accent);flex-shrink:0;">B 来源</span>
+    <button class="btn" style="color:var(--accent);border-color:var(--accent);" @click="pairBrowse('b')">📂 选择</button>
+    <span style="font-size:11px;color:var(--text-dim);background:var(--surface2);padding:3px 10px;border-radius:5px;border:1px solid var(--border);max-width:180px;" class="ellipsis" :title="pairFolderPath.b">
+      {{pairFolderPath.b ? pairFolderPath.b.split(/[\\/]/).pop() + '（'+pairFiles.b.length+'张）' : '未选择'}}
+    </span>
+    <div class="toolbar-sep"></div>
+    <!-- 输出前缀 -->
+    <span style="font-size:12px;color:var(--text-dim);flex-shrink:0;">组名前缀</span>
+    <input v-model="pairPrefix" style="width:90px;font-size:12px;" class="mono" placeholder="group_">
+    <span style="font-size:12px;color:var(--text-dim);flex-shrink:0;">起始</span>
+    <input v-model="pairStartNum" type="number" style="width:60px;font-size:12px;" class="mono">
+    <div style="flex:1;"></div>
+    <span style="font-size:12px;color:var(--text-dim);">已配对 <strong style="color:var(--accent);">{{pairList.length}}</strong> 组</span>
+    <button class="btn btn-red" style="font-size:12px;" @click="pairList=[]" :disabled="!pairList.length">清空</button>
+    <button class="btn btn-accent" style="font-size:13px;font-weight:700;" @click="pairExecute" :disabled="!pairList.length">▶ 执行配对</button>
+  </div>
+
+  <!-- 中间：配对列表 + 左右图片网格 -->
+  <div style="flex:1;display:flex;gap:6px;overflow:hidden;min-height:0;">
+
+    <!-- 配对列表（最左侧） -->
+    <div style="width:220px;flex-shrink:0;display:flex;flex-direction:column;background:var(--surface);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;">
+      <div class="sec-hdr">
+        <span class="sec-hdr-title">配对列表</span>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:4px;">
+        <div v-if="!pairList.length" style="padding:20px 10px;text-align:center;font-size:12px;color:var(--text-mut);">暂无配对</div>
+        <div v-for="(p,i) in pairList" :key="i"
+          style="font-size:11px;padding:5px 8px;border-radius:5px;margin-bottom:3px;background:var(--surface2);display:flex;align-items:center;gap:4px;">
+          <span style="color:var(--text-mut);min-width:20px;font-family:monospace;">{{i+1}}.</span>
+          <div style="flex:1;min-width:0;">
+            <div class="ellipsis" style="color:var(--green);" :title="p.a">{{p.a}}</div>
+            <div class="ellipsis" style="color:var(--accent);" :title="p.b">{{p.b}}</div>
+            <div class="ellipsis mono" style="color:var(--text-mut);font-size:10px;">→ {{p.name}}</div>
+          </div>
+          <button @click="pairList.splice(i,1)" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;flex-shrink:0;">×</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- A 侧图片网格 -->
+    <div style="flex:1;display:flex;flex-direction:column;background:var(--surface);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;min-width:0;">
+      <div class="sec-hdr">
+        <span class="sec-hdr-title" style="color:var(--green);">A 来源图</span>
+        <span style="font-size:11px;color:var(--text-mut);">点击选中 → 再点 B 侧配对</span>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:6px;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start;">
+        <div v-for="f in pairFiles.a" :key="f"
+          @click="pairSelectA(f)" @dblclick.stop="zoomSrc=`/api/pair/image/a/${encodeURIComponent(f)}`"
+          style="position:relative;cursor:pointer;border-radius:6px;overflow:hidden;border:2px solid transparent;transition:all .15s;"
+          :style="pairStateA(f)">
+          <img :src="`/api/pair/thumb/a/${encodeURIComponent(f)}`" style="width:160px;height:106px;object-fit:cover;display:block;" loading="lazy">
+          <div style="font-size:9px;text-align:center;padding:2px 3px;background:var(--surface2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;">{{f}}</div>
+          <!-- 已配对角标 -->
+          <div v-if="pairUsedA.has(f)" style="position:absolute;top:3px;right:3px;background:var(--green);color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;font-weight:700;">已配</div>
+        </div>
+        <div v-if="!pairFiles.a.length" style="width:100%;padding:40px;text-align:center;color:var(--text-mut);font-size:13px;">请先选择 A 来源目录</div>
+      </div>
+    </div>
+
+    <!-- B 侧图片网格 -->
+    <div style="flex:1;display:flex;flex-direction:column;background:var(--surface);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;min-width:0;">
+      <div class="sec-hdr">
+        <span class="sec-hdr-title" style="color:var(--accent);">B 来源图</span>
+        <span style="font-size:11px;color:var(--text-mut);">选好 A 后点此配对</span>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:6px;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start;">
+        <div v-for="f in pairFiles.b" :key="f"
+          @click="pairSelectB(f)" @dblclick.stop="zoomSrc=`/api/pair/image/b/${encodeURIComponent(f)}`"
+          style="position:relative;cursor:pointer;border-radius:6px;overflow:hidden;border:2px solid transparent;transition:all .15s;"
+          :style="pairStateB(f)">
+          <img :src="`/api/pair/thumb/b/${encodeURIComponent(f)}`" style="width:160px;height:106px;object-fit:cover;display:block;" loading="lazy">
+          <div style="font-size:9px;text-align:center;padding:2px 3px;background:var(--surface2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;">{{f}}</div>
+          <div v-if="pairUsedB.has(f)" style="position:absolute;top:3px;right:3px;background:var(--accent);color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;font-weight:700;">已配</div>
+        </div>
+        <div v-if="!pairFiles.b.length" style="width:100%;padding:40px;text-align:center;color:var(--text-mut);font-size:13px;">请先选择 B 来源目录</div>
+      </div>
+    </div>
+
+  </div>
+</div><!-- end pair mode -->
 
 <!-- ═══ 模态框 ═══ -->
 
@@ -914,7 +1027,6 @@
           <input v-model="newProjNote" style="width:100%;font-size:13px;" placeholder="备注说明" @keydown.enter="createProject">
         </div>
       </div>
-      <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;">将保存当前所选目录（<span :style="{color:anyDirSelected?'var(--green)':'var(--orange)'}">{{anyDirSelected?'已选择目录':'未选择目录'}}</span>）、模式和标签分类配置</div>
       <button class="btn btn-accent" @click="createProject" :disabled="!newProjName.trim()">＋ 创建项目</button>
     </div>
 
@@ -982,7 +1094,7 @@ createApp({
       label_defs: [], labels: {}, label_filter: null,
       list_items: [], global_tags: [],
       stats: {total:0,no_input:0,no_result:0,no_txt:0,no_ref:0,res_mismatch:0,displayed:0},
-      res_mismatch_cur: false, has_ref_dir: false, has_result_dir: false,
+      res_mismatch_cur: false, has_ref_dir: false, has_result_dir: false, tag_filter_neg: false,
       cap_ready: false, cap_model_loaded: false, cap_status: '', cap_progress: 0, cap_log: [],
     });
 
@@ -1021,12 +1133,92 @@ createApp({
       _toastTimer = setTimeout(() => { toastMsg.value = ''; }, ms);
     }
 
+    // UI 主模式
+    const uiMode = ref('annotate');  // 'annotate' | 'pair'
+
+    // 配对模式
+    const pairFolderPath = reactive({a: '', b: ''});
+    const pairFiles = reactive({a: [], b: []});
+    const pairSelectedA = ref(null);
+    const pairList = ref([]);
+    const pairPrefix = ref('group_');
+    const pairStartNum = ref(1);
+
+    const pairUsedA = computed(() => new Set(pairList.value.map(p => p.a)));
+    const pairUsedB = computed(() => new Set(pairList.value.map(p => p.b)));
+
+    function pairStateA(f) {
+      if (pairSelectedA.value === f) return {borderColor:'#4b9fd4', background:'rgba(75,159,212,0.12)'};
+      if (pairUsedA.value.has(f)) return {borderColor:'var(--green)', opacity:'0.6'};
+      return {};
+    }
+    function pairStateB(f) {
+      if (pairUsedB.value.has(f)) return {borderColor:'var(--accent)', opacity:'0.6'};
+      return {};
+    }
+
+    async function pairBrowse(side) {
+      try {
+        const r = await api('GET', '/browse-dir');
+        if (!r.path) return;
+        const data = await api('POST', '/pair/set-folder', {side, path: r.path});
+        pairFolderPath[side] = data.path;
+        pairFiles[side] = data.files;
+      } catch(e) { alert('选择失败：' + e.message); }
+    }
+
+    function pairSelectA(f) {
+      // 取消选中已配对的 → 先取消配对
+      if (pairUsedA.value.has(f)) {
+        const idx = pairList.value.findIndex(p => p.a === f);
+        if (idx >= 0) pairList.value.splice(idx, 1);
+        return;
+      }
+      pairSelectedA.value = pairSelectedA.value === f ? null : f;
+    }
+
+    function pairSelectB(f) {
+      // 点已配对的 B → 取消配对
+      if (pairUsedB.value.has(f)) {
+        const idx = pairList.value.findIndex(p => p.b === f);
+        if (idx >= 0) pairList.value.splice(idx, 1);
+        return;
+      }
+      if (!pairSelectedA.value) { toast('请先点击 A 侧图片'); return; }
+      const num = pairStartNum.value + pairList.value.length;
+      const name = pairPrefix.value + String(num).padStart(3, '0');
+      pairList.value.push({a: pairSelectedA.value, b: f, name});
+      pairSelectedA.value = null;
+    }
+
+    async function pairExecute() {
+      if (!pairList.value.length) return;
+      try {
+        const outInput = st.dirs?.input || null;
+        const outResult = st.dirs?.result || null;
+        const r = await api('POST', '/pair/execute', {
+          pairs: pairList.value,
+          out_input: outInput,
+          out_result: outResult,
+        });
+        let msg = `✓ 配对完成：${r.ok} 组\n输入图 → ${r.out_input}\n结果图 → ${r.out_result}`;
+        if (r.errors?.length) msg += `\n失败 ${r.errors.length} 条：\n` + r.errors.join('\n');
+        alert(msg);
+        if (r.ok > 0) {
+          pairList.value = [];
+          // 如果输出到了当前项目目录，自动刷新
+          if (outInput || outResult) { await refresh(); uiMode.value = 'annotate'; }
+        }
+      } catch(e) { alert('执行失败：' + e.message); }
+    }
+
     // Project management
     const showProjects = ref(false);
     const projectList = ref([]);
     const currentProject = ref(null);
     const newProjName = ref('');
     const newProjNote = ref('');
+    const newProjKeepDirs = ref(true);
 
     // Modals
     const showRename = ref(false);
@@ -1335,13 +1527,19 @@ createApp({
       clearTimeout(onTagSearch._t);
       onTagSearch._t = setTimeout(() => {
         const v = tagSearchInput.value.trim().toLowerCase();
-        api('POST', '/set-tag-filter', {tag: v || null}).then(data => applyState(data));
+        api('POST', '/set-tag-filter', {tag: v || null, negative: st.tag_filter_neg}).then(data => applyState(data));
       }, 280);
+    }
+
+    async function toggleTagNeg() {
+      const v = tagSearchInput.value.trim().toLowerCase();
+      const data = await api('POST', '/set-tag-filter', {tag: v || null, negative: !st.tag_filter_neg});
+      applyState(data);
     }
 
     async function clearTagFilter() {
       tagSearchInput.value = '';
-      const data = await api('POST', '/set-tag-filter', {tag: null});
+      const data = await api('POST', '/set-tag-filter', {tag: null, negative: false});
       applyState(data);
     }
 
@@ -1373,11 +1571,23 @@ createApp({
     }
 
     // ── Tag editing ────────────────────────────────────
-    function addTagFromInput() {
+    async function addTagFromInput() {
       const parts = tagInput.value.split(',').map(t=>t.trim()).filter(Boolean);
-      parts.forEach(t => { if (!editTags.value.includes(t)) editTags.value.push(t); });
-      tagInput.value = '';
-      modified.value = true;
+      if (!parts.length) return;
+      // 多选模式：直接写入所有选中项
+      if (selectedIndices.value.length > 1) {
+        const names = selectedIndices.value
+          .filter(i => i < st.list_items.length)
+          .map(i => st.list_items[i].name);
+        const data = await api('POST', '/add-tags-to-items', {names, tags: parts});
+        toast(`✓ 已为 ${data.count} 项添加 Tag`);
+        applyState(data);
+        tagInput.value = '';
+      } else {
+        parts.forEach(t => { if (!editTags.value.includes(t)) editTags.value.push(t); });
+        tagInput.value = '';
+        modified.value = true;
+      }
     }
 
     function removeTag(tag) {
@@ -1402,9 +1612,18 @@ createApp({
       } catch(e) { alert('保存失败：' + e.message); }
     }
 
-    function addGlobalTag(tag) {
-      if (st.cur<0) return;
-      if (!editTags.value.includes(tag)) { editTags.value.push(tag); modified.value=true; }
+    async function addGlobalTag(tag) {
+      if (selectedIndices.value.length > 1) {
+        const names = selectedIndices.value
+          .filter(i => i < st.list_items.length)
+          .map(i => st.list_items[i].name);
+        const data = await api('POST', '/add-tags-to-items', {names, tags: [tag]});
+        toast(`✓ 已为 ${data.count} 项添加 "${tag}"`);
+        applyState(data);
+      } else {
+        if (st.cur < 0) return;
+        if (!editTags.value.includes(tag)) { editTags.value.push(tag); modified.value = true; }
+      }
     }
 
     async function filterByGlobalTag(tag) {
@@ -1617,6 +1836,18 @@ createApp({
     }
 
     // ── Batch tag ops ──────────────────────────────────
+    async function addTagToSelected() {
+      if (!tagInput.value.trim() || selectedIndices.value.length < 2) return;
+      const tags = tagInput.value.split(',').map(t => t.trim()).filter(Boolean);
+      const names = selectedIndices.value
+        .filter(i => i < st.list_items.length)
+        .map(i => st.list_items[i].name);
+      const data = await api('POST', '/add-tags-to-items', {names, tags});
+      toast(`✓ 已为 ${data.count} 项添加 Tag`);
+      applyState(data);
+      tagInput.value = '';
+    }
+
     async function batchAdd() {
       const tag = prompt(`对当前筛选的 ${st.filtered_count} 个文件操作\n输入 Tag（逗号分隔多个）：`);
       if (!tag) return;
@@ -1729,16 +1960,21 @@ createApp({
       await loadProjects();
       newProjName.value = '';
       newProjNote.value = '';
+      newProjKeepDirs.value = anyDirSelected.value; // 有路径时默认保存，否则默认清空
       showProjects.value = true;
     }
 
     async function createProject() {
       if (!newProjName.value.trim()) return;
       try {
+        const keepDirs = anyDirSelected.value
+          ? confirm('是否将当前目录路径保存到新项目？\n\n确定 → 保存当前路径\n取消 → 清空路径，新项目从头开始')
+          : false;
+        const dirs = keepDirs ? st.dirs : {input: null, ref: null, result: null};
         const data = await api('POST', '/projects', {
           name: newProjName.value.trim(),
           note: newProjNote.value.trim(),
-          dirs: st.dirs,
+          dirs,
           mode: st.mode,
           label_defs: st.label_defs,
         });
@@ -1746,7 +1982,6 @@ createApp({
         await loadProjects();
         newProjName.value = '';
         newProjNote.value = '';
-        // 加载项目的状态（目录等）
         applyState(data);
         modified.value = false;
         imgTs.value = Date.now();
@@ -1797,7 +2032,7 @@ createApp({
 
     async function captionCurrent() {
       if (!curName.value) return;
-      const data = await api('POST', '/caption/run', {name:curName.value, model:capModel.value});
+      const data = await api('POST', '/caption/run', {name:curName.value, model:capModel.value, overwrite:capOverwrite.value});
       if (data.caption_result?.status==='ok') {
         editTags.value = data.caption_result.tags;
         modified.value = false;
@@ -1917,16 +2152,18 @@ createApp({
       showManageLabels, labelRows, showLabelStats, statsData,
       showCaption, capModel, capOverwrite, zoomSrc, translateResult,
       thumbStrip, capLogEl, swapRefListEl,
-      toastMsg,
-      showProjects, projectList, currentProject, newProjName, newProjNote,
+      toastMsg, uiMode,
+      pairFolderPath, pairFiles, pairSelectedA, pairList, pairPrefix, pairStartNum,
+      pairUsedA, pairUsedB, pairStateA, pairStateB, pairBrowse, pairSelectA, pairSelectB, pairExecute,
+      showProjects, projectList, currentProject, newProjName, newProjNote, newProjKeepDirs,
       openDirInput, browseDirNative, browseAndSetPath, confirmDirInput,
-      refresh, setMode, navigate, navigateTo, setFilter, onTagSearch, clearTagFilter, clearLabelFilter,
+      refresh, setMode, navigate, navigateTo, setFilter, onTagSearch, clearTagFilter, clearLabelFilter, toggleTagNeg,
       clickItem, ctrlClick, shiftClick,
       addTagFromInput, removeTag, renameTag, saveTags, addGlobalTag, filterByGlobalTag,
       labelBtnStyle, setLabel, filterByLabel, cycleColor, saveLabelDefs, handlePieClick,
       deleteCurrentConfirm, confirmRename, updateRnPreview, calcNewNames, confirmBatchRename,
       confirmSwapRef, confirmCopy, alignCrop, batchAlignCrop,
-      batchAdd, batchDel, batchReplace, translateTags, zoomImage,
+      addTagToSelected, batchAdd, batchDel, batchReplace, translateTags, zoomImage,
       onThumbWheel, startSash,
       captionStartService, captionCurrent, captionBatch, captionStop,
       openProjectManager, createProject, openProject, saveCurrentProject, deleteProject, formatDate,
