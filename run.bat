@@ -16,4 +16,9 @@ if errorlevel 1 (
 echo Checking dependencies...
 python -m pip install --quiet --disable-pip-version-check pillow send2trash fastapi uvicorn python-multipart
 
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :7788 ^| findstr LISTENING') do (
+    echo Killing existing process on port 7788 ^(PID %%a^)...
+    taskkill /PID %%a /F >nul 2>&1
+)
+
 python main_web.py

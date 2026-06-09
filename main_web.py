@@ -67,6 +67,7 @@ class AppState:
         self.filter_mode: str = 'all'
         self.tag_filter: Optional[str] = None
         self._tag_filter_neg: bool = False
+        self.preview_keyword: Optional[str] = None
         self._label_defs: List[dict] = []
         self._labels: Dict[str, str] = {}
         self._label_filter: Optional[str] = None
@@ -110,8 +111,9 @@ class AppState:
             self.filtered = []
             self.cur = -1
             self.filter_mode = 'all'
-            self.tag_filter = None
-            self._tag_filter_neg = False
+            self.tag_filter = proj.get('tag_filter') or None
+            self._tag_filter_neg = bool(proj.get('tag_filter_neg', False))
+            self.preview_keyword = proj.get('preview_keyword') or None
             self._label_filter = None
             self._res_mismatch = set()
             self._thumb_cache = {}
@@ -160,10 +162,18 @@ class AppState:
                     if d['name'] == label:
                         label_color = d.get('color')
                         break
+            tags = [t.strip() for t in self.txt_content.get(name, '').split(',') if t.strip()]
+            pk = self.preview_keyword or self.tag_filter
+            if pk:
+                matched = [t for t in tags if pk in t.lower()]
+                tag_preview = ', '.join(matched[:6]) if matched else ', '.join(tags[:2])
+            else:
+                tag_preview = ', '.join(tags[:4])
             return {'name': name, 'icon': icon, 'color': color,
                     'label': label, 'label_color': label_color,
                     'has_input': name in inp, 'has_result': name in res,
-                    'has_ref': name in ref, 'has_txt': name in self.txt_files}
+                    'has_ref': name in ref, 'has_txt': name in self.txt_files,
+                    'tag_preview': tag_preview}
 
         list_items = [item_status(n) for n in self.filtered]
 
@@ -189,6 +199,7 @@ class AppState:
             'filter_mode': self.filter_mode,
             'tag_filter': self.tag_filter,
             'tag_filter_neg': self._tag_filter_neg,
+            'preview_keyword': self.preview_keyword,
             'label_defs': self._label_defs,
             'labels': self._labels,
             'label_filter': self._label_filter,
@@ -947,13 +958,18 @@ class ProjectManager:
         self._save_file()
         return proj
 
-    def save_to_project(self, pid: str, dirs: dict, mode: str, label_defs: list):
+    def save_to_project(self, pid: str, dirs: dict, mode: str, label_defs: list,
+                         tag_filter: str = None, tag_filter_neg: bool = False,
+                         preview_keyword: str = None):
         proj = self._find(pid)
         if not proj:
             raise ValueError(f'Project {pid} not found')
         proj['dirs'] = dirs
         proj['mode'] = mode
         proj['label_defs'] = label_defs
+        proj['tag_filter'] = tag_filter or None
+        proj['tag_filter_neg'] = tag_filter_neg
+        proj['preview_keyword'] = preview_keyword or None
         proj['last_opened'] = datetime.now().isoformat(timespec='seconds')
         self._save_file()
         return proj
@@ -1088,6 +1104,9 @@ class SaveProjectReq(BaseModel):
     dirs: dict = {}
     mode: str = 'one'
     label_defs: list = []
+    tag_filter: Optional[str] = None
+    tag_filter_neg: bool = False
+    preview_keyword: Optional[str] = None
 
 class UpdateProjectReq(BaseModel):
     name: Optional[str] = None
@@ -1356,7 +1375,9 @@ def open_project(pid: str):
 @app.post('/api/projects/{pid}/save')
 def save_project(pid: str, req: SaveProjectReq):
     try:
-        proj = proj_mgr.save_to_project(pid, req.dirs, req.mode, req.label_defs)
+        proj = proj_mgr.save_to_project(pid, req.dirs, req.mode, req.label_defs,
+                                          req.tag_filter, req.tag_filter_neg,
+                                          req.preview_keyword)
         return {'ok': True, 'project': proj}
     except ValueError as e:
         raise HTTPException(404, str(e))

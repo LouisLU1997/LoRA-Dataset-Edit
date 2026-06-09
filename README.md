@@ -16,6 +16,24 @@ DataTag Studio 是一款本地运行的图像数据集管理与 Tag 标注工具
 
 ## 更新日志
 
+### v6.0
+
+**Tag 筛选持久化**
+- 项目保存时自动记录当前 Tag 筛选词（正向 / 反向），下次打开项目自动恢复
+- 新增「预览关键词」字段：保存时将当前筛选词存为预览关键词，与搜索筛选独立
+
+**右侧全局 Tags 搜索升级**
+- 搜索框整合「非」反向筛选按钮，不再需要左侧单独的 Tag 搜索栏
+- 左侧文件列表改为仅展示当前筛选状态提示（筛选词 + 一键清除）
+- 输入关键词后按 **↑ / ↓** 在过滤出的 Tag 列表中移动高亮，**Enter** 确认筛选，**Esc** 清空
+- 点击 Tag 后按 **↑ / ↓** 可直接切换到相邻 Tag 并应用筛选，无需鼠标
+
+**搜索词高亮**
+- 底部提示词 Tag 气泡中，凡含搜索关键词的字符，该词本身以黄色背景高亮标出
+
+**run.bat 自动清理端口**
+- 启动时自动检测 7788 端口是否被占用，有旧进程则自动 Kill，无需手动结束
+
 ### v5.0
 
 **配对模式（全新功能）**
@@ -31,7 +49,6 @@ DataTag Studio 是一款本地运行的图像数据集管理与 Tag 标注工具
 - 左侧 Tag 搜索栏新增「非」切换按钮
 - 正向（默认）：前缀匹配，显示含该 Tag 的图片
 - 反向（「非」激活，红色）：精确匹配，显示**不含**该 Tag 的图片
-- 右侧全局 Tags 面板状态栏区分显示「筛选：xxx」（蓝）与「排除：xxx」（红）
 
 **多选批量加 Tag**
 - 多选图片后，右侧全局 Tags 面板的「＋」按钮直接将该 Tag 写入所有选中项
@@ -39,18 +56,15 @@ DataTag Studio 是一款本地运行的图像数据集管理与 Tag 标注工具
 
 **AI 标注修复**
 - 「已有TXT」选项（跳过 / 追加 / 覆盖）现在真正生效
-- 跳过：已有内容的 txt 直接跳过，日志显示 ⏭
-- 追加：新 tag 合并到已有 tag，不重复
-- 覆盖：完全替换旧内容
 
 ### v4.0
 - **项目管理系统**：保存目录、模式与标签分类配置，启动自动恢复上次项目
 - **应用更名**：DataTag Studio
-- **界面重组**：模式切换移至左侧文件列表顶部；筛选按钮按需显示；全局 Tag 交互优化（单击筛选，悬停 ＋ 添加）
+- **界面重组**：全局 Tag 交互优化（单击筛选，悬停 ＋ 添加）
 - **Toast 提示**：轻量操作反馈
 
 ### v3.1
-- **数据标签系统**：自定义分类标签，环形图统计，数字键 1–9 快速打标，`_labels.json` 持久化
+- **数据标签系统**：自定义分类标签，环形图统计，数字键 1–9 快速打标
 
 ### v3.0
 - **交换参考图**、**批量重命名**（前缀序号 / 查找替换）、Ctrl+R 快捷键
@@ -87,7 +101,7 @@ DataTag Studio 是一款本地运行的图像数据集管理与 Tag 标注工具
 DataTag_Studio/
   ├── main_web.py           主程序
   ├── caption_service.py    AI 打标后台服务
-  ├── run.bat               启动脚本
+  ├── run.bat               启动脚本（自动清理端口）
   ├── static/
   │   ├── index.html        前端界面
   │   ├── app_icon.ico      网页图标
@@ -97,7 +111,7 @@ DataTag_Studio/
 
 ### 第三步：启动
 
-双击 `run.bat`，首次自动安装依赖，浏览器自动打开 `http://localhost:7788`。
+双击 `run.bat`，首次自动安装依赖，自动清理占用的旧进程，浏览器自动打开 `http://localhost:7788`。
 
 ---
 
@@ -108,7 +122,7 @@ DataTag_Studio/
 #### 基本操作
 
 1. 点击工具栏 **📂 输入图 / 📂 结果图** 选择数据集目录
-2. 左侧列表点击切换图片，↑↓ 键盘导航
+2. 左侧列表点击切换图片，← → 键盘导航
 3. 底部缩略图栏横向滚动预览，点击跳转
 4. Tag 区域点击气泡删除，输入框添加新 Tag，Ctrl+S 保存
 
@@ -124,13 +138,19 @@ DataTag_Studio/
 
 1. 点击标题旁 **📂 打开项目** 进入项目管理弹窗
 2. 输入名称，点击 **＋ 创建项目** 保存当前目录配置
-3. 启动时自动恢复上次打开的项目
+3. 启动时自动恢复上次打开的项目，**包含 Tag 筛选状态**
 
-#### Tag 筛选
+#### Tag 筛选（右侧全局 Tags 搜索框）
 
-- 左侧 Tag 搜索框输入前缀 → 正向筛选（含该 Tag 的图）
+- 输入关键词 → 实时过滤 Tag 列表，**↑ / ↓** 移动高亮，**Enter** 应用筛选
+- 点击某 Tag 后，**↑ / ↓** 切换到相邻 Tag 并立即筛选
 - 点「**非**」按钮（变红）→ 反向筛选（不含该 Tag 的图）
-- 右侧全局 Tags 面板：单击行筛选，悬停点「＋」添加到当前图
+- **Esc** 清空搜索与筛选
+- 筛选词保存到项目，下次打开自动恢复
+
+#### 搜索高亮
+
+右侧搜索框输入关键词后，底部提示词气泡中的匹配文字以**黄色**高亮显示。
 
 #### 多选批量操作
 
@@ -176,12 +196,15 @@ DataTag_Studio/
 
 | 快捷键 | 功能 |
 |--------|------|
-| ↑ / ↓ 或 ← / → | 上一张 / 下一张 |
+| ← / → | 上一张 / 下一张 |
+| ↑ / ↓（无焦点时） | 上一张 / 下一张 |
+| ↑ / ↓（Tag 游标激活时） | 切换全局 Tag 列表 |
+| Enter（Tag 游标激活时） | 应用高亮 Tag 为筛选 |
 | Ctrl+S | 保存 Tag |
 | Ctrl+R | 重命名当前图 |
 | Del | 删除当前图 |
 | 1–9 | 快速打标签分类 |
-| Esc | 关闭放大图 / 弹窗 |
+| Esc | 清空 Tag 搜索 / 关闭弹窗 |
 
 ---
 
@@ -189,6 +212,9 @@ DataTag_Studio/
 
 **Q：双击 run.bat 闪退？**
 Python 未安装或未勾选 Add Python to PATH。命令行输入 `python --version` 验证。
+
+**Q：run.bat 提示端口占用然后关闭？**
+v6 已内置自动 Kill 旧进程，一般不会出现此问题。若仍失败，请以管理员身份运行 run.bat。
 
 **Q：AI 打标连接超时？**
 程序自动切换 hf-mirror.com 镜像，等待片刻；持续失败可挂代理。
@@ -221,6 +247,24 @@ DataTag Studio is a local image dataset management and tag annotation tool desig
 
 ## Changelog
 
+### v6.0
+
+**Persistent Tag Filter**
+- Tag filter (keyword + positive/negative mode) is saved with each project and restored automatically on open
+- A separate "preview keyword" is stored so the filter state is independent of active search
+
+**Upgraded Global Tags Search**
+- The right-panel search box now includes the **"非" (NOT)** toggle — the left-side tag search bar has been removed
+- The left panel shows a compact filter status chip (current filter + clear button) instead
+- While typing: **↑ / ↓** moves a highlight cursor through the filtered tag list; **Enter** applies the highlighted tag; **Esc** clears
+- After clicking a tag: **↑ / ↓** navigates to adjacent tags in the list and applies them instantly
+
+**Keyword Highlight in Tag Chips**
+- When a search keyword is active, matching text within tag chips is highlighted in yellow
+
+**Auto Port Cleanup in run.bat**
+- On startup, run.bat detects and kills any existing process on port 7788, preventing "port in use" crashes
+
 ### v5.0
 
 **Pairing Mode (New)**
@@ -229,41 +273,36 @@ DataTag Studio is a local image dataset management and tag annotation tool desig
 - Click an A-side image to select (blue border) → click a B-side image to pair; paired images show a badge
 - Double-click any thumbnail to view full-size (Esc to close)
 - Left panel shows the pair list in real time; individual pairs can be removed
-- **▶ Execute** converts all paired images to PNG and writes them to the project's input/result directories; auto-refreshes and returns to Annotation Mode
+- **▶ Execute** converts all paired images to PNG and writes them to the project's input/result directories
 - Supports any image format (jpg / png / webp / bmp / tiff / avif / gif, etc.)
 
 **Negative Tag Filter**
-- New **"非" (NOT)** toggle button in the tag search bar
-- Normal mode: prefix match — shows images that contain the tag
-- Negative mode (red): exact match — shows images that **do not** contain the tag
-- Right panel filter chip shows blue "筛选" (filter) or red "排除" (exclude) accordingly
+- New **"非" (NOT)** toggle in the tag search bar
+- Normal: prefix match — shows images containing the tag
+- Negative (red): exact match — shows images **without** the tag
 
 **Multi-select Batch Tag Add**
-- With multiple images selected, clicking **＋** in the global tags panel adds the tag to all selected items instantly
-- Pressing Enter in the tag input box also batch-writes to all selected items
+- With multiple images selected, clicking **＋** in the global tags panel adds the tag to all selected items
+- Pressing Enter in the tag input also batch-writes to all selected items
 
 **AI Captioning Fix**
-- "Existing TXT" options (Skip / Append / Overwrite) now actually work
-- Skip: images with existing content are skipped (⏭ in log)
-- Append: new tags are merged without duplicates
-- Overwrite: existing content is fully replaced
+- Skip / Append / Overwrite for existing TXT files now works correctly
 
 ### v4.0
-- **Project Management**: save directory configs and auto-restore on startup; renamed to DataTag Studio
-- **UI Reorganization**: mode toggle moved to left panel; filter buttons shown only when issues exist; global tag interaction redesigned
-- **Toast Notifications**: lightweight operation feedback
+- **Project Management**: save configs and auto-restore on startup; renamed to DataTag Studio
+- **UI Reorganization**, **Toast Notifications**
 
 ### v3.1
-- **Data Label System**: custom image classification labels, ring chart statistics, number key shortcuts, `_labels.json` persistence
+- **Data Label System**: custom labels, ring chart, number key shortcuts
 
 ### v3.0
-- **Swap Reference Images**, **Batch Rename** (prefix+number / find-replace), **Ctrl+R shortcut**
+- **Swap Reference Images**, **Batch Rename**, **Ctrl+R**
 
 ### v2.0
 - **Rename**, **Refresh**, **Copy Groups**, thumbnail performance
 
 ### v1.0
-- Initial release: dual/triple panel, bubble tag editor, WD14 + Qwen3.5 AI captioning, align & crop, batch operations
+- Initial release: dual/triple panel, bubble tag editor, WD14 + Qwen3.5 AI, align & crop, batch ops
 
 ---
 
@@ -299,7 +338,7 @@ DataTag_Studio/
 
 ### Step 3: Launch
 
-Double-click `run.bat`. Dependencies install automatically on first run, then `http://localhost:7788` opens in your browser.
+Double-click `run.bat`. Dependencies install automatically on first run, any old process on port 7788 is killed, then `http://localhost:7788` opens in your browser.
 
 ---
 
@@ -308,37 +347,41 @@ Double-click `run.bat`. Dependencies install automatically on first run, then `h
 ### Annotation Mode (Default)
 
 1. Click **📂 Input / 📂 Result** to select dataset folders
-2. Click items in the left list; use ↑↓ to navigate
+2. Click items in the left list; use ← → to navigate
 3. Scroll the thumbnail strip horizontally; click to jump
 4. Click a tag bubble to delete; type in the input box to add; Ctrl+S to save
 
-#### Tag Filtering
+#### Tag Filtering (Right Panel Search Box)
 
-- Type in the left search box → positive prefix filter
-- Click **"非"** (turns red) → negative exact filter (images without the tag)
-- Right panel global tags: single-click to filter; hover and click **＋** to add
+- Type a keyword → filters the tag list; **↑ / ↓** to move cursor, **Enter** to apply
+- After clicking a tag: **↑ / ↓** navigates adjacent tags and applies instantly
+- Click **"非"** (turns red) → negative filter (images without the tag)
+- **Esc** clears search and filter
+- Filter state is saved per project and restored on open
+
+#### Keyword Highlight
+
+Matching text in tag chips is highlighted in yellow while a search keyword is active.
 
 #### Multi-select
 
 - **Shift+click** / **Ctrl+click** to select multiple images
-- With multiple selected: click **＋** in global tags panel → adds tag to all selected
-- With multiple selected: press Enter in tag input → batch-writes to all selected
+- With multiple selected: click **＋** in global tags → adds to all selected
+- With multiple selected: Enter in tag input → batch-writes to all selected
 
 #### AI Captioning
 
-1. Click **🤖 AI Caption**, choose **Skip / Append / Overwrite** for existing TXT files
+1. Click **🤖 AI Caption**, choose **Skip / Append / Overwrite**
 2. Click **🔧 Start Service**, select a model, then caption current or batch
 
 ### Pairing Mode
 
 Click **🔗 配对** in the toolbar:
 
-1. Select **Folder A** and **Folder B**
-2. Set output **prefix** and **start number**
-3. Click an A-side image (blue border) → click a B-side image to pair
-4. Double-click any thumbnail for full-size preview
-5. Click a paired image to unpair; remove items from the pair list on the left
-6. Click **▶ Execute** to convert all pairs to PNG and write to project directories
+1. Select **Folder A** and **Folder B**; set output prefix and start number
+2. Click an A-side image → click a B-side image to pair
+3. Double-click for full-size preview; click paired image to unpair
+4. Click **▶ Execute** to write all pairs to project directories
 
 ---
 
@@ -346,19 +389,25 @@ Click **🔗 配对** in the toolbar:
 
 | Shortcut | Action |
 |----------|--------|
-| ↑ / ↓ or ← / → | Previous / Next image |
+| ← / → | Previous / Next image |
+| ↑ / ↓ (no focus) | Previous / Next image |
+| ↑ / ↓ (tag cursor active) | Navigate global tag list |
+| Enter (tag cursor active) | Apply highlighted tag as filter |
 | Ctrl+S | Save tags |
 | Ctrl+R | Rename current group |
 | Del | Delete current group |
 | 1–9 | Quick-assign label |
-| Esc | Close zoom / modal |
+| Esc | Clear tag search / close modal |
 
 ---
 
 ## FAQ
 
 **Q: run.bat closes immediately?**
-Python not installed or PATH not set. Run `python --version` in a terminal.
+Python not installed or not in PATH. Run `python --version` in a terminal.
+
+**Q: Port already in use?**
+v6 auto-kills the old process on startup. If it still fails, run run.bat as Administrator.
 
 **Q: AI captioning times out?**
 App auto-switches to hf-mirror.com. Use a proxy if it keeps failing.
@@ -367,7 +416,7 @@ App auto-switches to hf-mirror.com. Use a proxy if it keeps failing.
 Qwen3.5-4B requires an NVIDIA GPU. Use WD14 on CPU-only machines.
 
 **Q: Where do paired images go?**
-By default, into the current project's input/result directories. If no project directories are set, they go to `paired_input` / `paired_result` folders next to the source folders.
+Into the current project's input/result directories, or `paired_input` / `paired_result` next to the source folders if no project is set.
 
 ---
 

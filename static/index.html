@@ -116,6 +116,7 @@
     transition: border-color .12s;
   }
   .tag-chip:hover { border-color: var(--accent); }
+  .tag-chip-hl { border-color: var(--yellow) !important; background: rgba(212,168,75,0.15) !important; color: var(--yellow) !important; }
   .tag-chip .del { color: #e05555; cursor: pointer; padding: 0 4px; font-size: 14px; line-height: 1; }
   .tag-chip .del:hover { color: var(--red); }
 
@@ -203,6 +204,7 @@
   .global-tag-item:hover { background: var(--surface2); }
   .global-tag-item.highlighted { color: var(--green); }
   .global-tag-item.filtered { color: var(--accent); font-weight: 600; }
+  .global-tag-item.global-tag-cursor { background: var(--surface3); color: var(--text); outline: 1px solid var(--accent); }
   .global-tag-add { opacity: 0; font-size: 15px; line-height: 1; color: var(--green); padding: 0 2px; flex-shrink: 0; transition: opacity .12s; cursor: pointer; }
   .global-tag-item:hover .global-tag-add { opacity: 1; }
   .global-tag-add:hover { color: var(--accent); }
@@ -357,14 +359,12 @@
         :disabled="f.disabled" @click="setFilter(f.k)">{{f.l}}</button>
     </div>
 
-    <!-- Tag 搜索 -->
-    <div style="padding:6px 8px;display:flex;gap:4px;align-items:center;border-bottom:1px solid var(--border);">
-      <span style="font-size:11px;color:var(--text-dim);">🔍</span>
-      <input v-model="tagSearchInput" @input="onTagSearch" style="flex:1;font-size:12px;" class="mono" :placeholder="st.tag_filter_neg?'排除 Tag…':'Tag 前缀搜索…'">
-      <button class="btn" style="padding:2px 8px;font-size:11px;font-weight:600;"
-        :style="st.tag_filter_neg?{background:'var(--red)',color:'#fff',borderColor:'var(--red)'}:{}"
-        @click="toggleTagNeg()" title="反向筛选：排除含此 Tag 的图">非</button>
-      <button class="btn" style="padding:2px 8px;font-size:12px;" @click="clearTagFilter()">×</button>
+    <!-- 筛选状态（有筛选时显示） -->
+    <div v-if="st.tag_filter" style="padding:3px 10px;background:rgba(67,100,247,0.06);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:11px;font-weight:600;" :style="{color: st.tag_filter_neg ? 'var(--red)' : 'var(--accent)'}">
+        {{st.tag_filter_neg ? '排除：' : '筛选：'}}{{st.tag_filter}}
+      </span>
+      <button class="btn" style="padding:1px 6px;font-size:11px;" @click="clearTagFilter()">× 清除</button>
     </div>
 
     <!-- 统计 -->
@@ -519,7 +519,7 @@
       <!-- Tag 气泡 -->
       <div style="flex:1;overflow-y:auto;padding:6px 8px;">
         <span v-for="tag in editTags" :key="tag" class="tag-chip">
-          <span @dblclick="renameTag(tag)">{{tag}}</span>
+          <span @dblclick="renameTag(tag)" v-html="hlTag(tag)"></span>
           <span class="del" @click="removeTag(tag)">×</span>
         </span>
         <span v-if="!editTags.length && curName" style="font-size:12px;color:var(--text-mut);">暂无 Tag，在下方输入框添加</span>
@@ -548,21 +548,22 @@
       <span style="font-size:11px;color:var(--text-mut);">{{st.global_tags?.length||0}} 种</span>
     </div>
     <!-- Tag 搜索框 -->
-    <div style="padding:6px 8px;border-bottom:1px solid var(--border);">
-      <input v-model="globalTagSearch" style="width:100%;font-size:12px;" class="mono" placeholder="🔍 搜索…">
-    </div>
-    <!-- 筛选状态 -->
-    <div v-if="st.tag_filter" style="background:rgba(67,100,247,0.06);padding:4px 8px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);">
-      <span style="font-size:11px;font-weight:600;" :style="{color: st.tag_filter_neg ? 'var(--red)' : 'var(--accent)'}">
-        {{st.tag_filter_neg ? '排除：' : '筛选：'}}{{st.tag_filter}}
-      </span>
-      <button class="btn" style="padding:1px 6px;font-size:11px;" @click="clearTagFilter()">× 清除</button>
+    <div style="padding:6px 8px;display:flex;gap:4px;align-items:center;border-bottom:1px solid var(--border);">
+      <input v-model="globalTagSearch" style="flex:1;font-size:12px;" class="mono" placeholder="🔍 搜索…"
+        @input="globalTagCursor=-1"
+        @keydown.up.prevent="globalTagCursor=Math.max(0,globalTagCursor-1); scrollGlobalTagCursor()"
+        @keydown.down.prevent="globalTagCursor=Math.min(filteredGlobalTags.length-1,globalTagCursor+1); scrollGlobalTagCursor()"
+        @keydown.enter.prevent="if(globalTagCursor>=0&&filteredGlobalTags[globalTagCursor]){filterByGlobalTag(filteredGlobalTags[globalTagCursor][0]);globalTagCursor=-1}"
+        @keydown.escape="globalTagSearch='';globalTagCursor=-1;clearTagFilter()">
+      <button class="btn" style="padding:2px 8px;font-size:11px;font-weight:600;"
+        :style="st.tag_filter_neg?{background:'var(--red)',color:'#fff',borderColor:'var(--red)'}:{}"
+        @click="toggleTagNeg()" title="反向筛选：排除含此 Tag 的图">非</button>
     </div>
     <!-- Tag 列表 -->
-    <div style="flex:1;overflow-y:auto;padding:4px;">
-      <div v-for="[tag,cnt] in filteredGlobalTags" :key="tag"
+    <div ref="globalTagListEl" style="flex:1;overflow-y:auto;padding:4px;">
+      <div v-for="([tag,cnt],idx) in filteredGlobalTags" :key="tag"
         class="global-tag-item"
-        :class="{highlighted: curTagSet.has(tag), filtered: st.tag_filter===tag}"
+        :class="{highlighted: curTagSet.has(tag), filtered: st.tag_filter===tag, 'global-tag-cursor': globalTagCursor===idx}"
         @click="filterByGlobalTag(tag)"
         :title="tag"
         style="position:relative;">
@@ -1117,6 +1118,7 @@ createApp({
     const tagInput = ref('');
     const tagSearchInput = ref('');
     const globalTagSearch = ref('');
+    const globalTagCursor = ref(-1);
     const selectedIndices = ref([]);
     const lastClickIdx = ref(-1);
 
@@ -1427,6 +1429,7 @@ createApp({
       if (!modified.value) {
         editTags.value = [...(st.cur_tags || [])];
       }
+      tagSearchInput.value = st.tag_filter || '';
     }
 
     function showDirKey(key) {
@@ -1629,7 +1632,21 @@ createApp({
     async function filterByGlobalTag(tag) {
       const newTag = st.tag_filter===tag ? null : tag;
       tagSearchInput.value = newTag || '';
+      const idx = filteredGlobalTags.value.findIndex(([t]) => t === tag);
+      globalTagCursor.value = newTag ? idx : -1;
       const data = await api('POST', '/set-tag-filter', {tag: newTag});
+      applyState(data);
+    }
+
+    async function navigateGlobalTag(delta) {
+      const list = filteredGlobalTags.value;
+      if (!list.length) return;
+      const next = Math.max(0, Math.min(list.length - 1, globalTagCursor.value + delta));
+      globalTagCursor.value = next;
+      scrollGlobalTagCursor();
+      const tag = list[next][0];
+      tagSearchInput.value = tag;
+      const data = await api('POST', '/set-tag-filter', {tag});
       applyState(data);
     }
 
@@ -1777,6 +1794,34 @@ createApp({
       applyState(data);
       showBatchRename.value = false;
       imgTs.value = Date.now();
+    }
+
+    // ── Global tag list ref ────────────────────────────
+    const globalTagListEl = ref(null);
+    function hlTag(tag) {
+      const q = globalTagSearch.value;
+      if (!q) return tag;
+      const ql = q.toLowerCase();
+      const parts = [];
+      let i = 0;
+      const tl = tag.toLowerCase();
+      while (i < tag.length) {
+        const idx = tl.indexOf(ql, i);
+        if (idx === -1) { parts.push(tag.slice(i)); break; }
+        if (idx > i) parts.push(tag.slice(i, idx));
+        parts.push(`<mark style="background:rgba(212,168,75,0.45);color:#f5c842;border-radius:2px;padding:0 1px;">${tag.slice(idx, idx + q.length)}</mark>`);
+        i = idx + q.length;
+      }
+      return parts.join('');
+    }
+
+    function scrollGlobalTagCursor() {
+      nextTick(() => {
+        const el = globalTagListEl.value;
+        if (!el) return;
+        const items = el.querySelectorAll('.global-tag-item');
+        if (items[globalTagCursor.value]) items[globalTagCursor.value].scrollIntoView({ block: 'nearest' });
+      });
     }
 
     // ── Swap ref ───────────────────────────────────────
@@ -2006,6 +2051,9 @@ createApp({
           dirs: st.dirs,
           mode: st.mode,
           label_defs: st.label_defs,
+          tag_filter: st.tag_filter || null,
+          tag_filter_neg: st.tag_filter_neg || false,
+          preview_keyword: st.tag_filter || st.preview_keyword || null,
         });
         currentProject.value = r.project;
         await loadProjects();
@@ -2077,6 +2125,11 @@ createApp({
         return;
       }
 
+      // ↑↓：有 tag 游标时导航 tag 列表，否则导航文件列表
+      if (e.key==='ArrowUp'||e.key==='ArrowDown') {
+        e.preventDefault();
+        if (globalTagCursor.value >= 0) { navigateGlobalTag(e.key==='ArrowUp' ? -1 : 1); return; }
+      }
       if (e.key==='ArrowLeft'||e.key==='ArrowUp') { e.preventDefault(); navigate(-1); }
       if (e.key==='ArrowRight'||e.key==='ArrowDown') { e.preventDefault(); navigate(1); }
       if (e.ctrlKey && e.key==='s') { e.preventDefault(); saveTags(); }
@@ -2139,7 +2192,7 @@ createApp({
 
     return {
       st, modified, isDark, toggleDark,
-      editTags, tagInput, tagSearchInput, globalTagSearch,
+      editTags, tagInput, tagSearchInput, globalTagSearch, globalTagCursor, globalTagListEl, scrollGlobalTagCursor,
       selectedIndices, selectedSet, lastClickIdx,
       leftW, rightW, thumbH, tagH,
       dirInputKey, dirInputPath, dirCfgs, showDirKey, dirName, anyDirSelected, anySelected,
@@ -2159,7 +2212,7 @@ createApp({
       openDirInput, browseDirNative, browseAndSetPath, confirmDirInput,
       refresh, setMode, navigate, navigateTo, setFilter, onTagSearch, clearTagFilter, clearLabelFilter, toggleTagNeg,
       clickItem, ctrlClick, shiftClick,
-      addTagFromInput, removeTag, renameTag, saveTags, addGlobalTag, filterByGlobalTag,
+      addTagFromInput, removeTag, renameTag, saveTags, addGlobalTag, filterByGlobalTag, navigateGlobalTag, hlTag,
       labelBtnStyle, setLabel, filterByLabel, cycleColor, saveLabelDefs, handlePieClick,
       deleteCurrentConfirm, confirmRename, updateRnPreview, calcNewNames, confirmBatchRename,
       confirmSwapRef, confirmCopy, alignCrop, batchAlignCrop,
